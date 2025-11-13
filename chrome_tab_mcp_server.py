@@ -17,9 +17,12 @@ import subprocess
 import requests
 import re
 import os
+import sys
+import argparse
 
-# Configuration - can be overridden via environment variables
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://192.168.46.79:11434")
+# Configuration - can be overridden via command-line args or environment variables
+# Default to localhost for local Ollama setup
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 MODEL = os.getenv("OLLAMA_MODEL", "Qwen3-30B-A3B-Thinking:Q8_K_XL")
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -191,5 +194,40 @@ def process_chrome_tab(
         return f"Error calling Ollama API: {str(e)}"
 
 
+def main():
+    """Parse command-line arguments and run the MCP server."""
+    parser = argparse.ArgumentParser(
+        description="Chrome Tab Reader MCP Server",
+        epilog="Environment variables can override defaults: OLLAMA_BASE_URL, OLLAMA_MODEL"
+    )
+
+    parser.add_argument(
+        "--ollama-url",
+        type=str,
+        help="URL of the Ollama server (e.g., http://localhost:11434 or http://example.com:11434). "
+             "Overrides OLLAMA_BASE_URL environment variable.",
+        default=None
+    )
+
+    parser.add_argument(
+        "--model",
+        type=str,
+        help="Name of the Ollama model to use. Overrides OLLAMA_MODEL environment variable.",
+        default=None
+    )
+
+    args = parser.parse_args()
+
+    # Apply command-line overrides to global configuration
+    global OLLAMA_BASE_URL, MODEL
+
+    if args.ollama_url:
+        OLLAMA_BASE_URL = args.ollama_url
+
+    if args.model:
+        MODEL = args.model
+
+
 if __name__ == "__main__":
+    main()
     mcp.run()
