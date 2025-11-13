@@ -71,36 +71,35 @@ on run argv
 end run
 
 on deduplicateLines(inputText)
-    -- Use awk to perform a robust, case-insensitive, order-preserving deduplication
-    set shellCmd to "echo " & quoted form of inputText & " | awk '!seen[tolower($0)]++'"
-    try
-        set dedupedText to (do shell script shellCmd without altering line endings)
-        return dedupedText
-    on error errMsg number errNum
-        return "Deduplication Error (awk): " & errMsg & " (Code: " & errNum & ")"
-    end try
+    -- Use awk to perform robust, case-insensitive, order-preserving deduplication
+    -- For large inputs, use a temporary file to avoid command-line length limits
+    set textLength to length of inputText
+
+    if textLength > 10000 then
+        -- Large input: use temporary file approach
+        set tempFile to "/tmp/chrome_tab_input_" & (do shell script "date +%s%N")
+        try
+            -- Write input to temp file
+            do shell script "cat > " & quoted form of tempFile & " <<'EOFDATA'\n" & inputText & "\nEOFDATA"
+            -- Process with awk and cleanup
+            set dedupedText to (do shell script "awk '!seen[tolower($0)]++' " & quoted form of tempFile & " && rm " & quoted form of tempFile without altering line endings)
+            return dedupedText
+        on error errMsg number errNum
+            do shell script "rm -f " & quoted form of tempFile
+            return "Deduplication Error (awk): " & errMsg & " (Code: " & errNum & ")"
+        end try
+    else
+        -- Small input: use direct pipeline approach
+        set shellCmd to "printf '%s' " & quoted form of inputText & " | awk '!seen[tolower($0)]++'"
+        try
+            set dedupedText to (do shell script shellCmd without altering line endings)
+            return dedupedText
+        on error errMsg number errNum
+            return "Deduplication Error (awk): " & errMsg & " (Code: " & errNum & ")"
+        end try
+    end if
 end deduplicateLines
 
-on getChromeContent()
-    -- Activate Chrome and get the current tab's content
-    tell application "Google Chrome"
-        if (count of windows) > 0 then
-            set currentTab to active tab of front window
-            -- Execute JS to clone the DOM, remove images, links, and SVGs, then return the cleaned HTML
-            set pageSource to execute currentTab javascript " \
-                (function() { \
-                    var cleanDoc = document.documentElement.cloneNode(true); \
-                    cleanDoc.querySelectorAll('img, a, svg').forEach(function(el) { el.remove(); }); \
-                    return cleanDoc.outerHTML; \
-                })();"
-            return pageSource
-        else
-            error "No Chrome window is open"
-        end if
-    end tell
-end getChromeContent
-
--- Alternative approach to get visible text content
 on getChromeTextContent()
     tell application "Google Chrome"
         if (count of windows) > 0 then
@@ -184,19 +183,13 @@ on filterToEnd(content, startKeyword)
 end filterToEnd
 
 on trimWhitespace(textStr)
-    set whitespace to {" ", "	", return}
-
-    -- Remove leading whitespace
-    repeat while (length of textStr > 0) and (character 1 of textStr is in whitespace)
-        if length of textStr = 1 then return ""
-        set textStr to text 2 thru -1 of textStr
-    end repeat
-
-    -- Remove trailing whitespace
-    repeat while (length of textStr > 0) and (character -1 of textStr is in whitespace)
-        if length of textStr = 1 then return ""
-        set textStr to text 1 thru -2 of textStr
-    end repeat
-
-    return textStr
+    -- Use sed to efficiently trim leading and trailing whitespace
+    set shellCmd to "printf '%s' " & quoted form of textStr & " | sed -e 's/^[[:space:]]*//;s/[[:space:]]*$//'"
+    try
+        set trimmedText to (do shell script shellCmd without altering line endings)
+        return trimmedText
+    on error errMsg number errNum
+        -- Fallback to original text if sed fails
+        return textStr
+    end try
 end trimWhitespace
