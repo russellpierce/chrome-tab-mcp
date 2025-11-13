@@ -23,8 +23,8 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
      │                  │
 ┌────▼──────────────┐    ┌───▼──────────────┐
 │  chrome_tab.scpt  │    │  Ollama Server   │
-│  (AppleScript)    │    │  192.168.46.79   │
-│                   │    │  Port 11434      │
+│  (AppleScript)    │    │  (Configurable)  │
+│                   │    │                  │
 └────┬──────────────┘    └───┬──────────────┘
      │                 │
      │ Chrome API      │ Model Inference
@@ -55,9 +55,34 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
 - `re` - Regex for cleaning responses
 - `subprocess` - Execute AppleScript
 
-**Configuration (via environment variables):**
-- `OLLAMA_BASE_URL` - Ollama server URL
-- `OLLAMA_MODEL` - Model name to use
+**Configuration (Priority Order - One of Each is Required):**
+1. **Command-line arguments** (highest priority):
+   - `--ollama-url <url>` - **REQUIRED**: Ollama server URL
+   - `--model <model_name>` - **REQUIRED**: Model name to use
+
+2. **Environment variables** (fallback):
+   - `OLLAMA_BASE_URL` - Ollama server URL (alternative to --ollama-url)
+   - `OLLAMA_MODEL` - Model name to use (alternative to --model)
+
+**Note:** Configuration is required. The server will raise a `ValueError` if both OLLAMA_BASE_URL and --ollama-url are not provided, or if both OLLAMA_MODEL and --model are not provided.
+
+**Example Configurations:**
+```bash
+# Using command-line arguments (recommended)
+uv run chrome_tab_mcp_server.py --ollama-url http://localhost:11434 --model llama2
+
+# Using environment variables
+export OLLAMA_BASE_URL=http://localhost:11434
+export OLLAMA_MODEL=llama2
+uv run chrome_tab_mcp_server.py
+
+# Mixed: env var + CLI arg
+export OLLAMA_BASE_URL=http://192.168.1.100:11434
+uv run chrome_tab_mcp_server.py --model qwen
+
+# Remote Ollama server
+uv run chrome_tab_mcp_server.py --ollama-url http://example.com:11434 --model llama2
+```
 
 ### 2. AppleScript Extractor (`chrome_tab.scpt`)
 
@@ -92,8 +117,48 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
 
 **Key Fields:**
 - `command`: "uv" (uses uv package manager)
-- `args`: Path to Python script
-- `env`: Environment variables for configuration
+- `args`: Array containing script path and command-line arguments:
+  - Path to Python script
+  - `--ollama-url` with server URL (**REQUIRED**)
+  - `--model` with model name (**REQUIRED**)
+
+**Configuration Example:**
+```json
+{
+  "mcpServers": {
+    "chrome-tab-reader": {
+      "command": "uv",
+      "args": [
+        "run",
+        "/path/to/chrome_tab_mcp_server.py",
+        "--ollama-url",
+        "http://192.168.1.100:11434",
+        "--model",
+        "Qwen3-30B-A3B-Thinking:Q8_K_XL"
+      ]
+    }
+  }
+}
+```
+
+**Alternative: Environment Variables**
+You can configure via environment variables instead of command-line args (both methods are supported):
+```json
+{
+  "mcpServers": {
+    "chrome-tab-reader": {
+      "command": "uv",
+      "args": ["run", "/path/to/chrome_tab_mcp_server.py"],
+      "env": {
+        "OLLAMA_BASE_URL": "http://192.168.1.100:11434",
+        "OLLAMA_MODEL": "Qwen3-30B-A3B-Thinking:Q8_K_XL"
+      }
+    }
+  }
+}
+```
+
+**Note:** Configuration is required. If neither method provides `OLLAMA_BASE_URL`/`--ollama-url` or `OLLAMA_MODEL`/`--model`, the server will raise a `ValueError` on startup.
 
 ## Data Flow
 
@@ -114,11 +179,12 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
 5. MCP Server builds request:
    - System: DEFAULT_SYSTEM_PROMPT (general analysis)
    - User: <page text>
-   - Model: Qwen3-30B-A3B-Thinking:Q8_K_XL
+   - Model: Configured via --model or OLLAMA_MODEL env var
    - Temperature: 0
    - enable_thinking: True
    ↓
-6. POST to Ollama: http://192.168.46.79:11434/v1/chat/completions
+6. POST to Ollama: /v1/chat/completions
+   (URL configured via --ollama-url or OLLAMA_BASE_URL env var)
    ↓
 7. Ollama processes with thinking model
    - Generates <think>reasoning</think>
@@ -391,15 +457,22 @@ tests/
 
 ### Configuration Points
 
-**For different Ollama servers:**
-- Edit `OLLAMA_BASE_URL` in config env
+**For different Ollama servers (Required):**
+- **Method 1 (Recommended):** Pass `--ollama-url` argument in `chrome_tab_mcp_config.json` args
+- **Method 2:** Set `OLLAMA_BASE_URL` environment variable
+- **Must provide at least one method above or ValueError will be raised**
 
-**For different models:**
-- Edit `OLLAMA_MODEL` in config env
-- Note: Model must support OpenAI-compatible API
+**For different models (Required):**
+- **Method 1 (Recommended):** Pass `--model` argument in `chrome_tab_mcp_config.json` args
+- **Method 2:** Set `OLLAMA_MODEL` environment variable
+- **Note:** Model must support OpenAI-compatible API
+- **Must provide at least one method above or ValueError will be raised**
 
-**For different default keywords:**
-- Edit filtering logic in chrome_tab.scpt
+**For different content filtering:**
+- Edit filtering logic in chrome_tab.scpt (AppleScript)
+
+**For custom analysis prompts:**
+- Set `system_prompt` parameter when calling `process_chrome_tab()` from Claude Code
 
 ## Future Enhancements
 
@@ -451,10 +524,22 @@ tests/
 
 ### Common Issues
 
+**ValueError: "OLLAMA_BASE_URL must be provided"**
+- Configuration is required. Must provide one of:
+  - `--ollama-url` command-line argument
+  - `OLLAMA_BASE_URL` environment variable
+- Example: `uv run chrome_tab_mcp_server.py --ollama-url http://localhost:11434 --model llama2`
+
+**ValueError: "OLLAMA_MODEL must be provided"**
+- Configuration is required. Must provide one of:
+  - `--model` command-line argument
+  - `OLLAMA_MODEL` environment variable
+- Example: `uv run chrome_tab_mcp_server.py --ollama-url http://localhost:11434 --model llama2`
+
 **"Cannot connect to Ollama server"**
 - Check Ollama is running: `ollama list`
-- Verify URL in config
-- Test with: `curl http://192.168.46.79:11434/v1/models`
+- Verify URL in config or --ollama-url argument
+- Test connectivity: `curl $OLLAMA_BASE_URL/v1/models` (or replace with your configured URL)
 
 **"No content retrieved from Chrome tab"**
 - Ensure Chrome is running
@@ -539,6 +624,22 @@ cleaned_text = re.sub(
 - Simplified parameter logic
 - Updated documentation for general use
 
+**v1.2 (2025-11-13)**
+- Added command-line argument support for Ollama server configuration
+- Removed hardcoded IP address (192.168.46.79) from code and docs
+- Defaults to localhost:11434 for local Ollama setup
+- Support both --ollama-url and environment variables for configuration
+- Updated MCP configuration examples with CLI args
+- Enhanced configuration documentation
+
+**v1.3 (2025-11-13)**
+- Made OLLAMA_BASE_URL and OLLAMA_MODEL configuration mandatory
+- Server raises ValueError if configuration not provided via CLI args or env vars
+- Removed implicit defaults to ensure explicit configuration
+- Improved error messages with helpful examples
+- Updated documentation to clarify required configuration
+- Enhanced type safety and configuration validation
+
 ## Authors
 
 - Russell (original concept and requirements)
@@ -551,5 +652,5 @@ MIT (assumed - update as needed)
 ---
 
 **Last Updated:** November 13, 2025
-**Status:** Production Ready (v1.1)
-**Next Steps:** Deploy and test in real-world scenarios
+**Status:** Production Ready (v1.3)
+**Next Steps:** Deploy with required configuration (OLLAMA_BASE_URL and OLLAMA_MODEL) and test in real-world scenarios

@@ -4,12 +4,13 @@
       "command": "uv",
       "args": [
         "run",
-        "/Users/russell/linkedin/chrome_tab_mcp_server.py"
-      ],
-      "env": {
-        "OLLAMA_BASE_URL": "http://192.168.46.79:11434",
-        "OLLAMA_MODEL": "Qwen3-30B-A3B-Thinking:Q8_K_XL"
-      }
+        "/path/to/chrome_tab_mcp_server.py",
+        "--ollama-url",
+        "http://localhost:11434",
+        "--model",
+        "llama2"
+      ]
     }
   }
 }
+

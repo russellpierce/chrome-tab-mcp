@@ -17,10 +17,13 @@ import subprocess
 import requests
 import re
 import os
+import sys
+import argparse
 
-# Configuration - can be overridden via environment variables
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://192.168.46.79:11434")
-MODEL = os.getenv("OLLAMA_MODEL", "Qwen3-30B-A3B-Thinking:Q8_K_XL")
+# Configuration - must be provided via command-line args or environment variables
+# These will be validated and set in main()
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
+MODEL = os.getenv("OLLAMA_MODEL")
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Process the attached webpage. "
@@ -191,5 +194,54 @@ def process_chrome_tab(
         return f"Error calling Ollama API: {str(e)}"
 
 
+def main():
+    """Parse command-line arguments and validate configuration."""
+    parser = argparse.ArgumentParser(
+        description="Chrome Tab Reader MCP Server",
+        epilog="Required configuration: Set --ollama-url and --model via CLI args or OLLAMA_BASE_URL and OLLAMA_MODEL env vars"
+    )
+
+    parser.add_argument(
+        "--ollama-url",
+        type=str,
+        help="URL of the Ollama server (e.g., http://localhost:11434 or http://192.168.1.100:11434). "
+             "Required: provide via CLI arg or OLLAMA_BASE_URL environment variable.",
+        default=None
+    )
+
+    parser.add_argument(
+        "--model",
+        type=str,
+        help="Name of the Ollama model to use (e.g., llama2, qwen, etc.). "
+             "Required: provide via CLI arg or OLLAMA_MODEL environment variable.",
+        default=None
+    )
+
+    args = parser.parse_args()
+
+    # Apply command-line overrides to global configuration
+    global OLLAMA_BASE_URL, MODEL
+
+    if args.ollama_url:
+        OLLAMA_BASE_URL = args.ollama_url
+
+    if args.model:
+        MODEL = args.model
+
+    # Validate that configuration is provided
+    if not OLLAMA_BASE_URL:
+        raise ValueError(
+            "OLLAMA_BASE_URL must be provided via --ollama-url argument or OLLAMA_BASE_URL environment variable. "
+            "Example: uv run chrome_tab_mcp_server.py --ollama-url http://localhost:11434"
+        )
+
+    if not MODEL:
+        raise ValueError(
+            "OLLAMA_MODEL must be provided via --model argument or OLLAMA_MODEL environment variable. "
+            "Example: uv run chrome_tab_mcp_server.py --model llama2"
+        )
+
+
 if __name__ == "__main__":
+    main()
     mcp.run()
