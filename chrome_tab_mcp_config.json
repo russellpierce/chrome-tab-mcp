@@ -8,10 +8,9 @@
         "--ollama-url",
         "http://localhost:11434",
         "--model",
-        "Qwen3-30B-A3B-Thinking:Q8_K_XL"
+        "llama2"
       ]
     }
   }
 }
-
 
