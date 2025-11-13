@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A Model Context Protocol (MCP) server that extracts and analyzes content from the active Google Chrome tab using a local Ollama AI server. Originally designed for LinkedIn profile processing but generalized to handle any web page content with flexible filtering capabilities.
+A Model Context Protocol (MCP) server that extracts and analyzes content from the active Google Chrome tab using a local Ollama AI server. Handles any web page content with flexible filtering capabilities and customizable analysis prompts.
 
 ## Architecture
 
@@ -21,11 +21,11 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
      │                  │
      │ subprocess       │ HTTP POST
      │                  │
-┌────▼────────┐    ┌───▼──────────────┐
-│  li.scpt    │    │  Ollama Server   │
-│ (AppleScript)│   │  192.168.46.79   │
-│             │    │  Port 11434      │
-└────┬────────┘    └───┬──────────────┘
+┌────▼──────────────┐    ┌───▼──────────────┐
+│  chrome_tab.scpt  │    │  Ollama Server   │
+│  (AppleScript)    │    │  192.168.46.79   │
+│                   │    │  Port 11434      │
+└────┬──────────────┘    └───┬──────────────┘
      │                 │
      │ Chrome API      │ Model Inference
      │                 │
@@ -59,7 +59,7 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
 - `OLLAMA_BASE_URL` - Ollama server URL
 - `OLLAMA_MODEL` - Model name to use
 
-### 2. AppleScript Extractor (`li.scpt`)
+### 2. AppleScript Extractor (`chrome_tab.scpt`)
 
 **Technology:** AppleScript with shell integration
 
@@ -71,7 +71,6 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
 - Copy result to clipboard (for user convenience)
 
 **Supported Arguments:**
-- No args: Return full deduplicated text
 - `--no-filter`: Return full deduplicated text
 - `<start> <end>`: Filter between both keywords
 - `<start> --to-end`: Filter from start keyword to document end
@@ -105,16 +104,16 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
    ↓
 2. MCP Server determines: No params → get full page
    ↓
-3. Execute: osascript li.scpt --no-filter
+3. Execute: osascript chrome_tab.scpt --no-filter
    ↓
 4. AppleScript:
    - Gets Chrome active tab text
    - Deduplicates lines
-   - Returns full deduplicated content
+   - Returns full page text
    ↓
 5. MCP Server builds request:
-   - System: DEFAULT_SYSTEM_PROMPT
-   - User: <full page text>
+   - System: DEFAULT_SYSTEM_PROMPT (general analysis)
+   - User: <page text>
    - Model: Qwen3-30B-A3B-Thinking:Q8_K_XL
    - Temperature: 0
    - enable_thinking: True
@@ -136,14 +135,14 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
 
 ```
 User calls: process_chrome_tab(
-    system_prompt="List technical skills",
-    start="Skills",
-    end="Projects"
+    system_prompt="List main topics",
+    start="Introduction",
+    end="Conclusion"
 )
    ↓
-Execute: osascript li.scpt Skills Projects
+Execute: osascript chrome_tab.scpt Introduction Conclusion
    ↓
-Filter between "Skills" and "Projects"
+Filter between "Introduction" and "Conclusion"
    ↓
 Build request with custom system prompt
    ↓
@@ -154,13 +153,13 @@ Call Ollama → Clean response → Return
 
 | system_prompt | start | end | osascript call | Behavior |
 |--------------|-------|-----|----------------|----------|
-| None | None | None | `li.scpt --no-filter` | Default: Full page, generic analysis prompt |
-| Custom | None | None | `li.scpt --no-filter` | Full page with custom analysis prompt |
-| Any | value | value | `li.scpt <start> <end>` | Filter between keywords |
-| Any | value | None | `li.scpt <start> --to-end` | From keyword to end |
-| Any | None | value | `li.scpt --from-start <end>` | From start to keyword |
+| None | None | None | `chrome_tab.scpt --no-filter` | Full page with default analysis |
+| Custom | None | None | `chrome_tab.scpt --no-filter` | Full page with custom analysis |
+| Any | value | value | `chrome_tab.scpt <start> <end>` | Filter between keywords |
+| Any | value | None | `chrome_tab.scpt <start> --to-end` | From keyword to end |
+| Any | None | value | `chrome_tab.scpt --from-start <end>` | From start to keyword |
 
-**Key Design Decision:** The default behavior is to extract and analyze the full page content. Filtering only applies when users explicitly provide `start` and/or `end` parameters.
+**Key Design Decision:** When no start/end keywords are provided, always get the full page content. The difference between default and custom modes is the `system_prompt` used for AI analysis, not the content extraction.
 
 ## API Integration
 
@@ -282,7 +281,6 @@ re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
 
 ### 5. Why Default to Full Page Analysis?
 
-
 **Decision:** Default to full page content extraction
 
 **Rationale:**
@@ -401,7 +399,7 @@ tests/
 - Note: Model must support OpenAI-compatible API
 
 **For different default keywords:**
-- Edit `startKeyword` and `endKeyword` in li.scpt
+- Edit filtering logic in chrome_tab.scpt
 
 ## Future Enhancements
 
@@ -462,7 +460,7 @@ tests/
 - Ensure Chrome is running
 - Check active tab has content
 - Grant Chrome accessibility permissions
-- Test manually: `osascript li.scpt --no-filter`
+- Test manually: `osascript chrome_tab.scpt --no-filter`
 
 **"Timeout waiting for AI response"**
 - Qwen3-30B with thinking takes 2-5 minutes
@@ -529,11 +527,17 @@ cleaned_text = re.sub(
 
 **v1.0 (2025-10-02)**
 - Initial implementation
-- LinkedIn profile analysis
+- General webpage analysis
 - Flexible keyword filtering
 - Qwen3-30B-A3B-Thinking integration
 - FastMCP server
 - Full documentation
+
+**v1.1 (2025-11-13)**
+- Removed LinkedIn-specific defaults
+- Made tool fully general-purpose
+- Simplified parameter logic
+- Updated documentation for general use
 
 ## Authors
 
@@ -546,6 +550,6 @@ MIT (assumed - update as needed)
 
 ---
 
-**Last Updated:** October 2, 2025
-**Status:** Production Ready
+**Last Updated:** November 13, 2025
+**Status:** Production Ready (v1.1)
 **Next Steps:** Deploy and test in real-world scenarios
