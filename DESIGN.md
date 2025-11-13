@@ -71,7 +71,7 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
 - Copy result to clipboard (for user convenience)
 
 **Supported Arguments:**
-- No args: Default filter "Recruiter" → "education"
+- No args: Return full deduplicated text
 - `--no-filter`: Return full deduplicated text
 - `<start> <end>`: Filter between both keywords
 - `<start> --to-end`: Filter from start keyword to document end
@@ -98,24 +98,23 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
 
 ## Data Flow
 
-### Example: Default LinkedIn Profile Analysis
+### Example: Default Full Page Analysis
 
 ```
 1. User calls: process_chrome_tab()
    ↓
-2. MCP Server determines: No params → use defaults
+2. MCP Server determines: No params → get full page
    ↓
-3. Execute: osascript li.scpt
+3. Execute: osascript li.scpt --no-filter
    ↓
 4. AppleScript:
    - Gets Chrome active tab text
    - Deduplicates lines
-   - Filters "Recruiter" → "education"
-   - Returns filtered text
+   - Returns full deduplicated content
    ↓
 5. MCP Server builds request:
-   - System: DEFAULT_SYSTEM_PROMPT (LinkedIn analysis)
-   - User: <filtered text>
+   - System: DEFAULT_SYSTEM_PROMPT
+   - User: <full page text>
    - Model: Qwen3-30B-A3B-Thinking:Q8_K_XL
    - Temperature: 0
    - enable_thinking: True
@@ -155,13 +154,13 @@ Call Ollama → Clean response → Return
 
 | system_prompt | start | end | osascript call | Behavior |
 |--------------|-------|-----|----------------|----------|
-| None | None | None | `li.scpt` | Default: "Recruiter" → "education" |
-| Custom | None | None | `li.scpt --no-filter` | Full page with custom analysis |
+| None | None | None | `li.scpt --no-filter` | Default: Full page, generic analysis prompt |
+| Custom | None | None | `li.scpt --no-filter` | Full page with custom analysis prompt |
 | Any | value | value | `li.scpt <start> <end>` | Filter between keywords |
 | Any | value | None | `li.scpt <start> --to-end` | From keyword to end |
 | Any | None | value | `li.scpt --from-start <end>` | From start to keyword |
 
-**Key Design Decision:** When `system_prompt` is provided alone (no start/end), we assume the user wants full page content for custom analysis. This differs from the default LinkedIn mode which applies filtering.
+**Key Design Decision:** The default behavior is to extract and analyze the full page content. Filtering only applies when users explicitly provide `start` and/or `end` parameters.
 
 ## API Integration
 
@@ -281,18 +280,16 @@ re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
 - **Issue:** Not reliably supported across all Ollama models
 - **Decision:** Client-side stripping is more portable
 
-### 5. Why Default to LinkedIn?
+### 5. Why Default to Full Page Analysis?
 
-**Context:** Originally built for LinkedIn profile analysis, then generalized.
 
-**Decision:** Keep LinkedIn as default behavior
+**Decision:** Default to full page content extraction
 
 **Rationale:**
-- Backwards compatible
-- Most common use case
-- Good sensible defaults ("Recruiter" → "education")
-- Can be overridden for other use cases
-- Server name "Chrome Tab Reader" indicates generalization
+- More flexible for user customization
+- Can be combined with custom system prompts for specialized analysis
+- Users can still apply filtering by specifying `start` and `end` parameters
+- Better aligns with product as "Chrome Tab Reader" (generic tool)
 
 ## Error Handling Strategy
 
@@ -325,15 +322,15 @@ re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
 
 ### Manual Test Cases
 
-**1. Default LinkedIn Mode:**
+**1. Default Full Page Mode:**
 ```python
 process_chrome_tab()
 ```
-- Verify filters "Recruiter" → "education"
+- Verify extracts full page content
 - Verify uses default system prompt
 - Verify returns analysis
 
-**2. Custom Full Page:**
+**2. Custom Analysis:**
 ```python
 process_chrome_tab(system_prompt="Summarize")
 ```
