@@ -282,12 +282,10 @@ re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
 
 ### 5. Why Default to Full Page Analysis?
 
-**Context:** Originally built for LinkedIn profile analysis with "Recruiter" → "education" filtering, then generalized.
 
 **Decision:** Default to full page content extraction
 
 **Rationale:**
-- Works for any web page type, not just LinkedIn
 - More flexible for user customization
 - Can be combined with custom system prompts for specialized analysis
 - Users can still apply filtering by specifying `start` and `end` parameters
