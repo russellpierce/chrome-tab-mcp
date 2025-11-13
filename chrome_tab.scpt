@@ -3,10 +3,18 @@
 
 on run argv
     -- Get the visible text from the current tab
-    set visibleText to getChromeTextContent()
+    try
+        set visibleText to getChromeTextContent()
+    on error errMsg number errNum
+        return "Error retrieving Chrome content: " & errMsg & " (Code: " & errNum & ")"
+    end try
 
     -- Deduplicate the lines of the text
-    set dedupedText to my deduplicateLines(visibleText)
+    try
+        set dedupedText to my deduplicateLines(visibleText)
+    on error errMsg number errNum
+        return "Error deduplicating content: " & errMsg & " (Code: " & errNum & ")"
+    end try
 
     -- Parse arguments to determine filtering behavior
     set doFilter to false
@@ -101,16 +109,36 @@ on deduplicateLines(inputText)
 end deduplicateLines
 
 on getChromeTextContent()
-    tell application "Google Chrome"
-        if (count of windows) > 0 then
-            set currentTab to active tab of front window
-            -- Get the visible text content instead of HTML
-            set pageText to execute currentTab javascript "document.body.innerText"
-            return pageText
-        else
-            error "No Chrome window is open"
-        end if
-    end tell
+    try
+        tell application "Google Chrome"
+            -- Check if Chrome is running and has windows
+            if (count of windows) = 0 then
+                error "Chrome has no open windows. Please open Chrome and navigate to a page."
+            end if
+
+            try
+                set currentTab to active tab of front window
+            on error
+                error "Unable to access Chrome's active tab. Check Chrome accessibility permissions."
+            end try
+
+            -- Get the visible text content via JavaScript
+            try
+                set pageText to execute currentTab javascript "document.body.innerText"
+
+                -- Check if we got valid content
+                if pageText is missing value then
+                    error "JavaScript returned null/undefined. The page may not have loaded properly or tab may be a special page (e.g., PDF, blank)."
+                end if
+
+                return pageText
+            on error jsErr
+                error "Failed to extract text from page: " & jsErr
+            end try
+        end tell
+    on error errMsg number errNum
+        error "getChromeTextContent Error: " & errMsg & " (Code: " & errNum & ")"
+    end try
 end getChromeTextContent
 
 on filterContentBetweenKeywords(content, startKeyword, endKeyword)
