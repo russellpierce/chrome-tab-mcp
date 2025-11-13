@@ -260,7 +260,7 @@ Call Ollama → Clean response → Return
 }
 ```
 
-**Why temperature=0?** For consistent, deterministic results in profile analysis.
+**Why temperature=0 (hardcoded)?** For consistent, deterministic results in analysis. This is intentionally hardcoded (not configurable) to ensure users always get reproducible outputs. This is essential for reliable webpage analysis and content extraction.
 
 **Why enable_thinking=true?** Qwen3-A3B-Thinking is a reasoning model that performs better with explicit thinking enabled.
 
@@ -359,29 +359,51 @@ re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
 
 ### Levels of Error Handling
 
-**1. AppleScript Level:**
-- Chrome not running → AppleScript error
-- No active tab → AppleScript error
-- Empty content → Return empty string
+**1. AppleScript Level (`getChromeTextContent()`):**
 
-**2. Python subprocess Level:**
+The function implements multi-level error detection:
+
+| Condition | Error Message | Actionable Suggestion |
+|-----------|---------------|---------------------|
+| No Chrome windows open | "Chrome has no open windows. Please open Chrome and navigate to a page." | User needs to open Chrome |
+| Cannot access active tab | "Unable to access Chrome's active tab. Check Chrome accessibility permissions." | Enable Chrome in System Preferences > Security & Privacy > Accessibility |
+| JavaScript returns null | "JavaScript returned null/undefined. The page may not have loaded properly or tab may be a special page (e.g., PDF, blank)." | Wait for page to load or use a regular web page |
+| JavaScript execution fails | "Failed to extract text from page: [specific error]" | Various JS execution issues |
+
+**2. AppleScript Main Run Level:**
+
+- Content retrieval errors → "Error retrieving Chrome content: [details]"
+- Deduplication errors → "Error deduplicating content: [details]"
+- Both errors include error codes for debugging
+
+**3. AppleScript Helper Functions:**
+
+- `deduplicateLines()` → Catches awk errors and reports details
+- `trimWhitespace()` → Gracefully falls back to original text if sed fails
+- Filtering functions → Return empty string if keywords not found
+
+**4. Python subprocess Level:**
 - Timeout (30s) → Return error message
-- Non-zero exit code → Return stderr
+- Non-zero exit code → Return stderr with context
 - File not found → Return error with path
 
-**3. Ollama API Level:**
+**5. Ollama API Level:**
 - Connection error → Helpful message with URL
 - Timeout (5min) → Timeout message
 - HTTP errors → Include status code and response
 - JSON decode error → Indicate invalid response with parsing details
 - Empty response → Check for choices array
 
-**4. MCP Tool Level:**
+**6. MCP Tool Level:**
 - All errors return `str` (not exceptions)
-- User-friendly error messages
-- Include actionable information
+- User-friendly error messages with context
+- Include actionable suggestions
 
-**Rationale:** MCP tools should return string results, not raise exceptions. Claude Code displays these to users, so they should be readable and actionable.
+**Rationale:**
+- Errors are handled at each level to provide specific feedback
+- Messages describe the problem AND suggest the solution
+- Error codes are included for debugging but not primary message
+- MCP tools return strings (not exceptions) for Claude Code display
 
 ## Testing Strategy
 
@@ -542,6 +564,37 @@ tests/
 - Verify URL in config or --ollama-url argument
 - Test connectivity: `curl $OLLAMA_BASE_URL/v1/models` (or replace with your configured URL)
 
+**"Chrome has no open windows. Please open Chrome and navigate to a page."**
+- Chrome is not running or all windows are closed
+- Solution: Open Chrome and navigate to a web page
+
+**"Unable to access Chrome's active tab. Check Chrome accessibility permissions."**
+- Chrome is running but accessibility API is not available
+- Solution: Grant Chrome accessibility permissions:
+  1. System Preferences → Security & Privacy
+  2. Accessibility (left panel)
+  3. Add or enable "Google Chrome" in the application list
+  4. Restart Chrome or Claude Code
+
+**"JavaScript returned null/undefined. The page may not have loaded properly or tab may be a special page (e.g., PDF, blank)."**
+- The active tab either hasn't fully loaded or is a special page (PDF, blank tab, etc.)
+- Solution:
+  - Wait for the page to finish loading
+  - Switch to a regular web page (not a PDF or special Chrome page)
+  - Try a different tab with content
+
+**"Failed to extract text from page: [error details]"**
+- JavaScript execution failed on the page
+- Solution: Check the error details and try:
+  - Switching to a different tab
+  - Reloading the current page
+  - Checking if the page blocks JavaScript execution
+
+**"No content retrieved from Chrome tab" (general)**
+- Catch-all message when content retrieval fails
+- First, check which specific error you got above
+- Test manually: `osascript chrome_tab.scpt --no-filter`
+
 **"Ollama server returned invalid JSON response"**
 - Ollama server returned malformed JSON
 - Check Ollama server logs for errors: `ollama logs`
@@ -549,12 +602,6 @@ tests/
 - Try restarting Ollama server
 - Ensure model is compatible with the OpenAI-compatible API
 - Check for network issues if using remote Ollama server
-
-**"No content retrieved from Chrome tab"**
-- Ensure Chrome is running
-- Check active tab has content
-- Grant Chrome accessibility permissions
-- Test manually: `osascript chrome_tab.scpt --no-filter`
 
 **"Timeout waiting for AI response"**
 - Qwen3-30B with thinking takes 2-5 minutes
