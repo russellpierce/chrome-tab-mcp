@@ -55,33 +55,44 @@ A Model Context Protocol (MCP) server that extracts and analyzes content from th
 - `re` - Regex for cleaning responses
 - `subprocess` - Execute AppleScript
 
-**Configuration (Priority Order - One of Each is Required):**
+**Configuration (Priority Order - OLLAMA_BASE_URL and OLLAMA_MODEL are Required):**
 1. **Command-line arguments** (highest priority):
    - `--ollama-url <url>` - **REQUIRED**: Ollama server URL
    - `--model <model_name>` - **REQUIRED**: Model name to use
+   - `--enable-thinking` - Optional: Enable thinking/reasoning mode for reasoning models (default: disabled)
 
 2. **Environment variables** (fallback):
    - `OLLAMA_BASE_URL` - Ollama server URL (alternative to --ollama-url)
    - `OLLAMA_MODEL` - Model name to use (alternative to --model)
+   - `OLLAMA_ENABLE_THINKING` - Enable thinking mode (true/1/yes to enable, default: false)
 
-**Note:** Configuration is required. The server will raise a `ValueError` if both OLLAMA_BASE_URL and --ollama-url are not provided, or if both OLLAMA_MODEL and --model are not provided.
+**Note:** `OLLAMA_BASE_URL` and `OLLAMA_MODEL` are required. The server will raise a `ValueError` if not provided via either CLI args or environment variables. `OLLAMA_ENABLE_THINKING` is optional and defaults to false.
 
 **Example Configurations:**
 ```bash
 # Using command-line arguments (recommended)
 uv run chrome_tab_mcp_server.py --ollama-url http://localhost:11434 --model llama2
 
+# With thinking enabled (for reasoning models like qwen)
+uv run chrome_tab_mcp_server.py --ollama-url http://localhost:11434 --model qwen --enable-thinking
+
 # Using environment variables
 export OLLAMA_BASE_URL=http://localhost:11434
 export OLLAMA_MODEL=llama2
 uv run chrome_tab_mcp_server.py
 
+# Enable thinking via environment variable
+export OLLAMA_BASE_URL=http://localhost:11434
+export OLLAMA_MODEL=qwen
+export OLLAMA_ENABLE_THINKING=true
+uv run chrome_tab_mcp_server.py
+
 # Mixed: env var + CLI arg
 export OLLAMA_BASE_URL=http://192.168.1.100:11434
-uv run chrome_tab_mcp_server.py --model qwen
+uv run chrome_tab_mcp_server.py --model qwen --enable-thinking
 
-# Remote Ollama server
-uv run chrome_tab_mcp_server.py --ollama-url http://example.com:11434 --model llama2
+# Remote Ollama server with thinking
+uv run chrome_tab_mcp_server.py --ollama-url http://example.com:11434 --model qwen --enable-thinking
 ```
 
 ### 2. AppleScript Extractor (`chrome_tab.scpt`)
@@ -262,7 +273,12 @@ Call Ollama → Clean response → Return
 
 **Why temperature=0 (hardcoded)?** For consistent, deterministic results in analysis. This is intentionally hardcoded (not configurable) to ensure users always get reproducible outputs. This is essential for reliable webpage analysis and content extraction.
 
-**Why enable_thinking=true?** Qwen3-A3B-Thinking is a reasoning model that performs better with explicit thinking enabled.
+**Why enable_thinking is configurable (default: false)?** Not all Ollama models support or benefit from thinking/reasoning modes:
+- **Reasoning models** (e.g., qwen-based models with reasoning): Enable with `--enable-thinking` flag for better analysis
+- **Standard models** (e.g., llama2, mistral): Should remain disabled as they don't support this feature
+- Made configurable instead of hardcoded to accommodate diverse model types
+- Defaults to false for compatibility with non-reasoning models
+- Users specify `--enable-thinking` or `OLLAMA_ENABLE_THINKING=true` only when using reasoning models
 
 ## Design Decisions
 
@@ -354,6 +370,23 @@ re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
 - Can be combined with custom system prompts for specialized analysis
 - Users can still apply filtering by specifying `start` and `end` parameters
 - Better aligns with product as "Chrome Tab Reader" (generic tool)
+
+### 6. Why is enable_thinking Configurable (not hardcoded)?
+
+**Considered:**
+- Hardcode `enable_thinking: true` (original approach)
+- Make it configurable via CLI args and env vars
+
+**Chosen:** Configurable (defaults to false)
+
+**Rationale:**
+- Different Ollama models have different capabilities:
+  - Reasoning models (qwen with thinking): Benefit from `enable_thinking=true`
+  - Standard models (llama2, mistral): Don't support thinking feature
+- Hardcoding would force all models to attempt thinking, causing errors with unsupported models
+- Configuration flexibility allows users to choose the right setting for their model
+- Default to false ensures compatibility with standard (non-reasoning) models
+- Users working with reasoning models can easily enable: `--enable-thinking` or `OLLAMA_ENABLE_THINKING=true`
 
 ## Error Handling Strategy
 
@@ -703,6 +736,15 @@ cleaned_text = re.sub(
 - Updated error handling documentation to include JSON parsing errors
 - Enhanced troubleshooting guide with JSON error resolution steps
 
+**v1.5 (2025-11-13)**
+- Made enable_thinking configurable instead of hardcoded
+- Added --enable-thinking command-line flag (default: false)
+- Added OLLAMA_ENABLE_THINKING environment variable support
+- Defaults to false for compatibility with standard models (llama2, mistral, etc.)
+- Users can enable for reasoning models (qwen with thinking) as needed
+- Updated configuration documentation with examples for thinking models
+- Added design decision documentation for configurable thinking mode
+
 ## Authors
 
 - Russell (original concept and requirements)
@@ -715,5 +757,5 @@ MIT (assumed - update as needed)
 ---
 
 **Last Updated:** November 13, 2025
-**Status:** Production Ready (v1.4)
-**Next Steps:** Deploy with robust error handling and test in real-world scenarios with various Ollama server configurations
+**Status:** Production Ready (v1.5)
+**Next Steps:** Deploy with configurable thinking mode for various Ollama models (reasoning and standard) and test in real-world scenarios

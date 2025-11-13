@@ -25,6 +25,8 @@ import json
 # These will be validated and set in main()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 MODEL = os.getenv("OLLAMA_MODEL")
+# enable_thinking defaults to False and can be enabled via env var or CLI arg
+ENABLE_THINKING = os.getenv("OLLAMA_ENABLE_THINKING", "false").lower() in ("true", "1", "yes")
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Process the attached webpage. "
@@ -154,7 +156,7 @@ def process_chrome_tab(
         ],
         "temperature": 0,
         "stream": False,
-        "enable_thinking": True
+        "enable_thinking": ENABLE_THINKING
     }
 
     # Call Ollama API
@@ -224,16 +226,28 @@ def main():
         default=None
     )
 
+    parser.add_argument(
+        "--enable-thinking",
+        action="store_true",
+        help="Enable thinking/reasoning mode for models that support it (e.g., qwen-based reasoning models). "
+             "Can also be set via OLLAMA_ENABLE_THINKING environment variable (true/false). "
+             "Default: false (disabled)",
+        default=False
+    )
+
     args = parser.parse_args()
 
     # Apply command-line overrides to global configuration
-    global OLLAMA_BASE_URL, MODEL
+    global OLLAMA_BASE_URL, MODEL, ENABLE_THINKING
 
     if args.ollama_url:
         OLLAMA_BASE_URL = args.ollama_url
 
     if args.model:
         MODEL = args.model
+
+    if args.enable_thinking:
+        ENABLE_THINKING = True
 
     # Validate that configuration is provided
     if not OLLAMA_BASE_URL:
