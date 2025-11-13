@@ -373,6 +373,7 @@ re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
 - Connection error → Helpful message with URL
 - Timeout (5min) → Timeout message
 - HTTP errors → Include status code and response
+- JSON decode error → Indicate invalid response with parsing details
 - Empty response → Check for choices array
 
 **4. MCP Tool Level:**
@@ -541,6 +542,14 @@ tests/
 - Verify URL in config or --ollama-url argument
 - Test connectivity: `curl $OLLAMA_BASE_URL/v1/models` (or replace with your configured URL)
 
+**"Ollama server returned invalid JSON response"**
+- Ollama server returned malformed JSON
+- Check Ollama server logs for errors: `ollama logs`
+- Verify Ollama is not crashing or restarting
+- Try restarting Ollama server
+- Ensure model is compatible with the OpenAI-compatible API
+- Check for network issues if using remote Ollama server
+
 **"No content retrieved from Chrome tab"**
 - Ensure Chrome is running
 - Check active tab has content
@@ -640,6 +649,13 @@ cleaned_text = re.sub(
 - Updated documentation to clarify required configuration
 - Enhanced type safety and configuration validation
 
+**v1.4 (2025-11-13)**
+- Added explicit JSON error handling for malformed API responses
+- Added json.JSONDecodeError exception handler in Ollama API calls
+- Improved error messages for invalid JSON responses
+- Updated error handling documentation to include JSON parsing errors
+- Enhanced troubleshooting guide with JSON error resolution steps
+
 ## Authors
 
 - Russell (original concept and requirements)
@@ -652,5 +668,5 @@ MIT (assumed - update as needed)
 ---
 
 **Last Updated:** November 13, 2025
-**Status:** Production Ready (v1.3)
-**Next Steps:** Deploy with required configuration (OLLAMA_BASE_URL and OLLAMA_MODEL) and test in real-world scenarios
+**Status:** Production Ready (v1.4)
+**Next Steps:** Deploy with robust error handling and test in real-world scenarios with various Ollama server configurations
