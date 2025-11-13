@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Title Reporter",
+  "version": "1.0",
+  "description": "Reports the title of the current tab",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Get Tab Title"
+  },
+  "permissions": [
+    "activeTab"
+  ]
+}
