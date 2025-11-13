@@ -50,22 +50,183 @@ Browser Extension (Manifest v3)
    ↓
 3. User clicks "Analyze"
    ↓
-4. Content script extracts: document.body.innerText from active tab
+4. Content script:
+   - Triggers lazy-loading by scrolling to bottom
+   - Waits for dynamic content to stabilize (MutationObserver)
+   - Extracts clean content using Readability.js
+   - Filters if keywords provided
    ↓
 5. Service worker sends HTTP POST to localhost MCP server:
    POST http://127.0.0.1:3000/tools/process_chrome_tab
    {
+     "content": "...",
      "system_prompt": "...",
      "start": "...",
      "end": "..."
    }
    ↓
 6. MCP server processes:
-   - Runs AppleScript OR direct local processing
-   - Calls Ollama
+   - Calls Ollama with content
    - Returns analysis
    ↓
 7. Extension receives response and displays in popup
+```
+
+## Content Extraction Strategy
+
+**Problem:** `document.body.innerText` alone captures raw text but misses:
+- Collapsed/hidden sections
+- Lazy-loaded content (infinite scroll, "Load More" buttons)
+- Single-page app (React/Vue) content still rendering
+- Excessive navigation/footer/sidebar noise
+
+**Solution:** Three-phase extraction strategy
+
+### Phase 1: Trigger Lazy-Loading (2-5 seconds)
+
+Simulate user behavior to trigger lazy-loading:
+
+```javascript
+async function triggerLazyLoading() {
+    // Scroll to bottom to trigger infinite scroll
+    let lastHeight = document.body.scrollHeight;
+
+    for (let i = 0; i < 5; i++) {
+        window.scrollTo(0, document.body.scrollHeight);
+        await sleep(500);
+
+        // Check if new content loaded
+        let newHeight = document.body.scrollHeight;
+        if (newHeight === lastHeight) {
+            // No new content, stop scrolling
+            break;
+        }
+        lastHeight = newHeight;
+    }
+
+    // Scroll back to top
+    window.scrollTo(0, 0);
+}
+```
+
+### Phase 2: Wait for DOM Stability (up to 3 minutes)
+
+Use MutationObserver to detect when DOM stops changing:
+
+```javascript
+async function waitForDOMStability(timeoutMs = 180000) {
+    // 3-minute timeout (matches Ollama processing time)
+
+    return new Promise((resolve) => {
+        let mutationCount = 0;
+        let stableTimer;
+
+        const observer = new MutationObserver((mutations) => {
+            mutationCount++;
+            clearTimeout(stableTimer);
+
+            // Reset stability timer on DOM changes
+            stableTimer = setTimeout(() => {
+                // DOM has been stable for 2 seconds
+                observer.disconnect();
+                resolve();
+            }, 2000);
+        });
+
+        // Observe entire document for changes
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            characterData: false,
+            attributeFilter: ['src', 'href'] // Ignore style/class changes
+        });
+
+        // Hard timeout after 3 minutes
+        setTimeout(() => {
+            observer.disconnect();
+            resolve();
+        }, timeoutMs);
+    });
+}
+```
+
+### Phase 3: Extract & Clean with Readability.js
+
+Use Mozilla's Readability.js (proven technology from Firefox Reader View):
+
+```javascript
+async function extractCleanContent() {
+    // Readability.js extracts main article/content
+    // Removes: navigation, sidebars, ads, comments
+    // Returns: structured article object with title, content, etc.
+
+    const reader = new Readability(document.cloneNode(true));
+    const article = reader.parse();
+
+    return article ? article.textContent : document.body.innerText;
+}
+```
+
+**Why Readability.js?**
+- ✅ Proven technology (powers Firefox Reader View)
+- ✅ Actively maintained by Mozilla
+- ✅ Removes noise (nav, ads, sidebars)
+- ✅ Handles most modern websites
+- ✅ Small bundle (~40KB minified, ~15KB gzipped)
+- ✅ Pure JavaScript (no dependencies)
+- ✅ Browser extension friendly
+
+**Security Note:** After extraction, sanitize with DOMPurify to prevent script injection:
+```javascript
+const clean = DOMPurify.sanitize(article.content);
+```
+
+### Complete Extraction Flow
+
+```javascript
+async function extractPageContent() {
+    try {
+        // Phase 1: Trigger lazy-loading
+        console.log("Triggering lazy-loading...");
+        await triggerLazyLoading();
+
+        // Phase 2: Wait for dynamic content to stabilize
+        console.log("Waiting for page to stabilize...");
+        await waitForDOMStability();
+
+        // Phase 3: Extract clean content
+        console.log("Extracting content with Readability...");
+        const content = await extractCleanContent();
+
+        return content;
+    } catch (error) {
+        // Fallback to simple innerText
+        console.warn("Extraction failed, falling back to innerText:", error);
+        return document.body.innerText;
+    }
+}
+```
+
+### Extension Manifest Updates
+
+Add readability.js and dompurify to content script:
+
+```json
+{
+  "content_scripts": [{
+    "matches": ["<all_urls>"],
+    "js": [
+      "lib/readability.min.js",
+      "lib/dompurify.min.js",
+      "content_script.js"
+    ]
+  }],
+  "web_accessible_resources": [{
+    "resources": ["lib/readability.min.js", "lib/dompurify.min.js"],
+    "matches": ["<all_urls>"]
+  }]
+}
 ```
 
 ## API Design: Extension ↔ MCP Server
@@ -219,13 +380,108 @@ Extension settings page allows user to configure:
 ### 1. Content Script (content_script.js)
 
 ```javascript
-// Extracts text from active tab
+// Sophisticated content extraction with lazy-loading and readability
 // Runs in page context (can access DOM directly)
 
-function extractPageContent() {
+// Helper functions
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Phase 1: Trigger lazy-loading by scrolling
+async function triggerLazyLoading() {
+    let lastHeight = document.body.scrollHeight;
+
+    for (let i = 0; i < 5; i++) {
+        window.scrollTo(0, document.body.scrollHeight);
+        await sleep(500);
+
+        let newHeight = document.body.scrollHeight;
+        if (newHeight === lastHeight) {
+            // No new content, stop scrolling
+            break;
+        }
+        lastHeight = newHeight;
+    }
+
+    // Scroll back to top
+    window.scrollTo(0, 0);
+}
+
+// Phase 2: Wait for DOM to stabilize (max 3 minutes)
+async function waitForDOMStability(timeoutMs = 180000) {
+    return new Promise((resolve) => {
+        let stableTimer;
+
+        const observer = new MutationObserver((mutations) => {
+            clearTimeout(stableTimer);
+
+            // Reset stability timer: DOM has been stable for 2 seconds
+            stableTimer = setTimeout(() => {
+                observer.disconnect();
+                resolve();
+            }, 2000);
+        });
+
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            characterData: false,
+            attributeFilter: ['src', 'href', 'data-src']
+        });
+
+        // Hard timeout after 3 minutes
+        setTimeout(() => {
+            observer.disconnect();
+            resolve();
+        }, timeoutMs);
+    });
+}
+
+// Phase 3: Extract clean content with Readability.js
+function extractCleanContent() {
+    try {
+        // Readability extracts main article content
+        const reader = new Readability(document.cloneNode(true));
+        const article = reader.parse();
+
+        if (article && article.textContent) {
+            // Sanitize with DOMPurify to prevent injection
+            return DOMPurify.sanitize(article.textContent);
+        }
+    } catch (error) {
+        console.warn("Readability extraction failed:", error);
+    }
+
+    // Fallback to innerText
     return document.body.innerText;
 }
 
+// Main extraction flow
+async function extractPageContent() {
+    try {
+        // Phase 1: Trigger lazy-loading
+        console.log("[Chrome Tab Reader] Triggering lazy-loading...");
+        await triggerLazyLoading();
+
+        // Phase 2: Wait for DOM to stabilize
+        console.log("[Chrome Tab Reader] Waiting for page to stabilize...");
+        await waitForDOMStability();
+
+        // Phase 3: Extract with Readability
+        console.log("[Chrome Tab Reader] Extracting content...");
+        const content = extractCleanContent();
+
+        console.log("[Chrome Tab Reader] Extraction complete");
+        return content;
+    } catch (error) {
+        console.error("[Chrome Tab Reader] Extraction error:", error);
+        return document.body.innerText;
+    }
+}
+
+// Filter content between keywords
 function extractContentBetweenKeywords(content, startKeyword, endKeyword) {
     const startIdx = content.toLowerCase().indexOf(startKeyword.toLowerCase());
     if (startIdx === -1) return "";
@@ -240,17 +496,23 @@ function extractContentBetweenKeywords(content, startKeyword, endKeyword) {
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "extractContent") {
-        const content = extractPageContent();
-        sendResponse({ content: content });
+        // Async extraction
+        extractPageContent().then(content => {
+            sendResponse({ content: content });
+        });
+        return true; // Keep channel open for async response
     }
     else if (request.action === "extractFiltered") {
-        const content = extractPageContent();
-        const filtered = extractContentBetweenKeywords(
-            content,
-            request.startKeyword,
-            request.endKeyword
-        );
-        sendResponse({ content: filtered });
+        // Async extraction with filtering
+        extractPageContent().then(content => {
+            const filtered = extractContentBetweenKeywords(
+                content,
+                request.startKeyword,
+                request.endKeyword
+            );
+            sendResponse({ content: filtered });
+        });
+        return true; // Keep channel open for async response
     }
 });
 ```
@@ -275,7 +537,7 @@ async function analyzePage(content, systemPrompt, startKeyword, endKeyword) {
                 start: startKeyword,
                 end: endKeyword
             }),
-            timeout: 300000  // 5 minute timeout
+            timeout: 540000  // 9 minute timeout (3min extraction + 5min Ollama + buffer)
         });
 
         if (!response.ok) {
