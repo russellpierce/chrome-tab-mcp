@@ -279,6 +279,16 @@ re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
 - **Issue:** Not reliably supported across all Ollama models
 - **Decision:** Client-side stripping is more portable
 
+### 5. Why Default to Full Page Analysis?
+
+**Decision:** Default to full page content extraction
+
+**Rationale:**
+- More flexible for user customization
+- Can be combined with custom system prompts for specialized analysis
+- Users can still apply filtering by specifying `start` and `end` parameters
+- Better aligns with product as "Chrome Tab Reader" (generic tool)
+
 ## Error Handling Strategy
 
 ### Levels of Error Handling
@@ -310,15 +320,15 @@ re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL)
 
 ### Manual Test Cases
 
-**1. Default Full Page Analysis:**
+**1. Default Full Page Mode:**
 ```python
 process_chrome_tab()
 ```
-- Verify gets full page content
+- Verify extracts full page content
 - Verify uses default system prompt
 - Verify returns analysis
 
-**2. Custom Full Page:**
+**2. Custom Analysis:**
 ```python
 process_chrome_tab(system_prompt="Summarize")
 ```
