@@ -19,6 +19,7 @@ import re
 import os
 import sys
 import argparse
+import json
 
 # Configuration - must be provided via command-line args or environment variables
 # These will be validated and set in main()
@@ -190,6 +191,12 @@ def process_chrome_tab(
         if hasattr(e.response, 'text'):
             error_msg += f"\nResponse: {e.response.text}"
         return error_msg
+    except json.JSONDecodeError as e:
+        return (
+            f"Error: Ollama server returned invalid JSON response. "
+            f"This may indicate a server error or misconfiguration. "
+            f"Details: {str(e)}"
+        )
     except Exception as e:
         return f"Error calling Ollama API: {str(e)}"
 

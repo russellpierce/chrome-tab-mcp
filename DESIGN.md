@@ -260,7 +260,7 @@ Call Ollama → Clean response → Return
 }
 ```
 
-**Why temperature=0?** For consistent, deterministic results in profile analysis.
+**Why temperature=0 (hardcoded)?** For consistent, deterministic results in analysis. This is intentionally hardcoded (not configurable) to ensure users always get reproducible outputs. This is essential for reliable webpage analysis and content extraction.
 
 **Why enable_thinking=true?** Qwen3-A3B-Thinking is a reasoning model that performs better with explicit thinking enabled.
 
@@ -391,6 +391,7 @@ The function implements multi-level error detection:
 - Connection error → Helpful message with URL
 - Timeout (5min) → Timeout message
 - HTTP errors → Include status code and response
+- JSON decode error → Indicate invalid response with parsing details
 - Empty response → Check for choices array
 
 **6. MCP Tool Level:**
@@ -594,6 +595,14 @@ tests/
 - First, check which specific error you got above
 - Test manually: `osascript chrome_tab.scpt --no-filter`
 
+**"Ollama server returned invalid JSON response"**
+- Ollama server returned malformed JSON
+- Check Ollama server logs for errors: `ollama logs`
+- Verify Ollama is not crashing or restarting
+- Try restarting Ollama server
+- Ensure model is compatible with the OpenAI-compatible API
+- Check for network issues if using remote Ollama server
+
 **"Timeout waiting for AI response"**
 - Qwen3-30B with thinking takes 2-5 minutes
 - Increase timeout in server code
@@ -687,6 +696,13 @@ cleaned_text = re.sub(
 - Updated documentation to clarify required configuration
 - Enhanced type safety and configuration validation
 
+**v1.4 (2025-11-13)**
+- Added explicit JSON error handling for malformed API responses
+- Added json.JSONDecodeError exception handler in Ollama API calls
+- Improved error messages for invalid JSON responses
+- Updated error handling documentation to include JSON parsing errors
+- Enhanced troubleshooting guide with JSON error resolution steps
+
 ## Authors
 
 - Russell (original concept and requirements)
@@ -699,5 +715,5 @@ MIT (assumed - update as needed)
 ---
 
 **Last Updated:** November 13, 2025
-**Status:** Production Ready (v1.3)
-**Next Steps:** Deploy with required configuration (OLLAMA_BASE_URL and OLLAMA_MODEL) and test in real-world scenarios
+**Status:** Production Ready (v1.4)
+**Next Steps:** Deploy with robust error handling and test in real-world scenarios with various Ollama server configurations
