@@ -42,35 +42,61 @@ Can we achieve cross-platform support (Mac + Windows + Linux) without:
 
 **Verdict:** ❌ Not recommended
 
-### Option 2: Chrome DevTools Protocol (pychrome/playwright)
-**Viable but with trade-offs**
+### Option 2: Chrome DevTools Protocol (Playwright/python-cdp)
+**Still viable in 2025, but with important caveats**
 
 **How it works:**
-- Connect to Chrome via WebSocket on localhost:9222
+- Launch Chrome with `--remote-debugging-port=9222` flag
+- Connect via WebSocket using Playwright's `connect_over_cdp()` or lower-level python-cdp
 - Execute JavaScript directly (same as AppleScript)
 - Cross-platform (Mac/Windows/Linux)
 
-**Example:**
+**Example with Playwright:**
 ```python
-import pychrome
-browser = pychrome.Browser(url="http://127.0.0.1:9222")
-tab = browser.list_tab()[0]
-result = tab.call_method("Runtime.evaluate",
-                         expression="document.body.innerText")
+from playwright.async_api import async_playwright
+
+async def get_chrome_content():
+    async with async_playwright() as p:
+        browser = await p.chromium.connect_over_cdp(
+            "http://127.0.0.1:9222"
+        )
+        page = (await browser.contexts)[0].pages[0]
+        content = await page.evaluate("document.body.innerText")
+        await browser.close()
+        return content
 ```
 
 **Pros:**
-- ✅ Cross-platform
+- ✅ Cross-platform (Mac/Windows/Linux)
 - ✅ Uses existing Chrome installation
-- ✅ Direct JavaScript execution (same capabilities as AppleScript)
-- ✅ Lightweight and fast
+- ✅ Direct JavaScript execution
+- ✅ Highly maintained (Playwright is actively developed by Microsoft)
+- ✅ More robust than low-level pychrome library
 
 **Cons:**
-- ❌ Requires Chrome launched with `--remote-debugging-port=9222`
-- ❌ Extra user friction (can't just click Chrome icon)
+- ❌ **Requires Chrome launched with `--remote-debugging-port=9222`** (extra user friction)
+- ❌ Extra setup step (can't just click Chrome icon)
+- ❌ **Recent Chrome security changes** (removed --remote-debugging-address, user profile restrictions)
+- ❌ **Lower fidelity than Playwright's native protocol** (acknowledged in docs)
 - ❌ Need separate launcher scripts/shortcuts
 
-**Verdict:** ⚠️ Good technical solution, but UX friction
+**2025 Status Updates:**
+- ✅ CDP is stable and actively maintained by Google for Chrome/Chromium
+- ⚠️ Google recently improved CDP tooling (new command editor in Feb 2025)
+- ⚠️ **Important:** Google removed the `--remote-debugging-address` flag in 2025
+- ⚠️ **Important:** Chrome now restricts automating the default user profile (policy change)
+  - Users must create a separate Chrome profile for automation
+  - Pointing userDataDir to "User Data" directory may cause crashes
+- ⚠️ Ecosystem is transitioning to WebDriver BiDi as the long-term standard
+- ⚠️ CDP support planned to be temporary until WebDriver BiDi is fully adopted
+
+**Library Landscape (2025):**
+- `pychrome` - Low-level, minimal maintenance, not recommended
+- `python-cdp` - Pure-Python CDP implementation, stable
+- **Playwright** - Modern, actively maintained, recommended for CDP usage
+- Puppeteer (Node.js) - Also viable but not relevant for Python
+
+**Verdict:** ⚠️ Still viable for technical users, but ecosystem is shifting away from CDP. User friction remains high, and Chrome's recent security changes make setup more complex.
 
 ### Option 3: Platform-Specific Native Scripts
 **Recommended approach**
@@ -188,28 +214,40 @@ Linux is the most challenging platform:
 
 **Realistic assessment:** Linux users are more technical and may be willing to use CDP with `--remote-debugging-port` flag.
 
-## Hybrid Approach Recommendation
+## Hybrid Approach Recommendation (Updated 2025)
 
-Given the technical realities:
+Given the technical realities and 2025 ecosystem status:
 
 ### Tier 1: macOS (Current)
-- ✅ AppleScript - works perfectly, zero setup
+- ✅ AppleScript - works perfectly, zero setup, fully supported
 - Status: **Production ready**
 
 ### Tier 2: Windows
-- ⚠️ PowerShell + UI Automation (limited)
-- ✅ CDP option for advanced users
-- Status: **Needs research and testing**
+- ⚠️ PowerShell + UI Automation (limited, not recommended)
+- ✅ **Playwright + CDP** (recommended for technical users)
+  - Requires: `--remote-debugging-port=9222` launch flag
+  - Requires: separate Chrome profile for automation
+  - Provides: reliable cross-platform experience
+- Status: **Viable with Playwright/CDP, requires configuration**
 
 ### Tier 3: Linux
-- ✅ CDP with remote debugging (recommended)
-- ⚠️ Browser extension (if needed)
-- Status: **Best effort support**
+- ✅ **Playwright + CDP** (recommended)
+  - Requires: `--remote-debugging-port=9222` launch flag
+  - Requires: separate Chrome profile for automation
+  - Best option for Linux users (most reliable)
+- ⚠️ Native script options limited (xdotool, qdbus fragile)
+- Status: **Best effort support via CDP**
 
 ### Universal Fallback
 - Browser extension available for all platforms
 - Users who want guaranteed cross-platform support can install it
-- Status: **Future enhancement**
+- Status: **Future enhancement (lower priority)**
+
+### Key Consideration: WebDriver BiDi Transition
+**Google's ecosystem is transitioning from CDP to WebDriver BiDi as the long-term standard.** CDP support is planned to be temporary. Future-proofing should consider:
+- Monitoring WebDriver BiDi maturity
+- Preparing migration path from CDP to WebDriver BiDi
+- Staying on Playwright (which supports both) ensures easier transition
 
 ## Implementation Plan
 
@@ -235,36 +273,77 @@ Given the technical realities:
 2. Submit to Chrome Web Store
 3. Provide as alternative installation method
 
-## Recommended Next Steps
+## Recommended Next Steps (Updated 2025)
 
-1. **Accept current macOS-only status** as stable foundation
-2. **Research Windows automation** - validate PowerShell approach
-3. **Document CDP setup** as cross-platform option for technical users
-4. **Defer browser extension** until there's clear user demand
+1. **Maintain macOS AppleScript as the primary implementation**
+   - It's excellent and requires no changes
+   - Continue to be the reference implementation
 
-## User Experience Comparison
+2. **Consider Playwright + CDP as the cross-platform extension**
+   - More viable than originally assessed
+   - Actively maintained (Microsoft's Playwright team)
+   - Good for Windows and Linux users willing to configure
 
-| Approach | Mac | Windows | Linux | Setup Complexity |
-|----------|-----|---------|-------|------------------|
-| **Current (AppleScript)** | ✅ Perfect | ❌ None | ❌ None | Zero |
-| **Platform scripts** | ✅ Perfect | ⚠️ Limited | ⚠️ Limited | Low |
-| **CDP (all platforms)** | ✅ Good | ✅ Good | ✅ Good | Medium (launch flag) |
-| **Browser extension** | ✅ Perfect | ✅ Perfect | ✅ Perfect | Low (one-time install) |
+3. **Document CDP setup requirements clearly**
+   - Recent Chrome changes require separate profile creation
+   - Document --remote-debugging-port configuration
+   - Provide step-by-step setup guide for Windows/Linux users
 
-## Conclusion
+4. **Monitor WebDriver BiDi maturity**
+   - CDP is temporary; BiDi is the future standard
+   - Plan migration path when WebDriver BiDi reaches feature parity
+   - Playwright will support this transition
 
-**Recommendation:** Keep current AppleScript implementation for macOS, add CDP support as documented option for Windows/Linux users.
+5. **Defer browser extension** until clear user demand emerges
+   - Lower priority given CDP viability
+   - Can revisit if Windows/Linux adoption requires it
+
+## User Experience Comparison (Updated 2025)
+
+| Approach | Mac | Windows | Linux | Setup Complexity | Notes |
+|----------|-----|---------|-------|------------------|-------|
+| **Current (AppleScript)** | ✅ Perfect | ❌ None | ❌ None | Zero | Best UX, no setup required |
+| **Platform scripts** | ✅ Perfect | ⚠️ Limited | ⚠️ Limited | Low | PowerShell limited on Windows |
+| **Playwright + CDP** | ✅ Good | ✅ Good | ✅ Good | **Medium-High** | Requires launch flag + separate profile |
+| **Browser extension** | ✅ Perfect | ✅ Perfect | ✅ Perfect | Medium | One-time install, most reliable |
+
+## Conclusion (Updated 2025)
+
+**Recommendation:** Maintain current AppleScript for macOS (excellent), add CDP + Playwright support as documented option for Windows/Linux users.
 
 **Rationale:**
-- macOS implementation is excellent - don't break it
-- Windows native automation is limited compared to macOS
-- CDP provides reliable cross-platform option for users willing to configure it
-- Browser extension can be future enhancement if demand emerges
+1. **macOS remains the primary, zero-friction platform**
+   - AppleScript implementation is excellent
+   - No setup or configuration required
+   - Should remain the reference implementation
 
-**Alternative consideration:** If Windows/Linux support is critical, prioritize browser extension development over platform-specific scripts.
+2. **CDP is viable for Windows/Linux, but with friction**
+   - Playwright is actively maintained and reliable
+   - Requires Chrome launch flag configuration
+   - Requires separate Chrome profile (policy change in 2025)
+   - Still significantly better than native script approaches
+
+3. **Ecosystem is transitioning to WebDriver BiDi**
+   - CDP is temporary; BiDi is the future standard
+   - Need to plan migration path
+   - Playwright supports both protocols
+
+4. **Chrome DevTools Protocol Status (2025)**
+   - ✅ Still actively maintained by Google
+   - ✅ Stable for Chrome/Chromium
+   - ⚠️ Recent security changes (--remote-debugging-address removed, profile restrictions added)
+   - ⚠️ Lower fidelity than Playwright's native protocol
+   - ⚠️ Ecosystem transitioning away (not replacement deprecated, but planned obsolescence)
+
+5. **Library Recommendations**
+   - Use **Playwright** for CDP (modern, maintained, cross-protocol support)
+   - Avoid **pychrome** (low-level, minimal maintenance)
+   - Only use **python-cdp** if Playwright is not suitable
+
+**Alternative consideration:** Browser extension development still viable as long-term fallback if Windows/Linux adoption requires guaranteed reliable support.
 
 ---
 
-**Status:** Proposal for discussion
-**Date:** 2025-10-03
-**Next Step:** Decide on Windows support priority and approach
+**Status:** Investigation complete and proposal updated
+**Date:** 2025-11-13 (Updated from 2025-10-03)
+**Next Step:** Decide on Windows/Linux support priority: CDP (medium-term) vs Browser Extension (long-term)
