@@ -22,10 +22,6 @@ import os
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://192.168.46.79:11434")
 MODEL = os.getenv("OLLAMA_MODEL", "Qwen3-30B-A3B-Thinking:Q8_K_XL")
 
-# Default LinkedIn profile filtering keywords
-DEFAULT_START_KEYWORD = "Recruiter"
-DEFAULT_END_KEYWORD = "education"
-
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Process the attached webpage. "
     "Think about the questions someone might ask of the contents on this page and provide the answers. "
@@ -65,7 +61,7 @@ def process_chrome_tab(
     filtering based on keywords or full page extraction.
 
     FILTERING BEHAVIOR:
-    - No parameters: LinkedIn profile mode (filters "Recruiter" → "education" with default prompt)
+    - No parameters: Full page analysis with default prompt
     - system_prompt only: Full page analysis with custom prompt
     - start + end: Filters content between both keywords
     - start only: Filters from keyword to end of document
@@ -112,16 +108,10 @@ def process_chrome_tab(
 
     # Determine filtering arguments
     if start is None and end is None:
-        if system_prompt is None:
-            # DEFAULT MODE: LinkedIn keywords only
-            # No custom prompt → use LinkedIn filtering with default analysis prompt
-            cmd.extend([DEFAULT_START_KEYWORD, DEFAULT_END_KEYWORD])
-        else:
-            # CUSTOM PROMPT MODE: Full page
-            # Custom prompt provided → get full page for custom analysis
-            cmd.append("--no-filter")
+        # No filtering specified - get full page
+        cmd.append("--no-filter")
     else:
-        # EXPLICIT FILTERING MODE: Use provided keywords
+        # Explicit filtering mode - use provided keywords
         if start is None:
             # From document start to end keyword
             cmd.extend(["--from-start", end])
