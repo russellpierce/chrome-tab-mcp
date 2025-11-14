@@ -10,18 +10,72 @@ function initializePopup() {
     console.log('[Chrome Tab Reader] Initializing popup');
 
     // Get references to UI elements
+    const accessTokenEl = document.getElementById('accessToken');
+    const copyTokenBtn = document.getElementById('copyTokenBtn');
+    const regenerateTokenBtn = document.getElementById('regenerateTokenBtn');
     const tabTitleEl = document.getElementById('tabTitle');
     const extractBtn = document.getElementById('extractBtn');
     const clearBtn = document.getElementById('clearBtn');
     const statusEl = document.getElementById('status');
     const contentAreaEl = document.getElementById('contentArea');
 
+    // Load and display access token
+    loadAccessToken();
+
     // Update tab title on load
     updateTabTitle();
 
     // Set up event listeners
+    copyTokenBtn.addEventListener('click', () => copyAccessToken());
+    regenerateTokenBtn.addEventListener('click', () => regenerateAccessToken());
     extractBtn.addEventListener('click', () => extractCurrentTab(statusEl, contentAreaEl, extractBtn));
     clearBtn.addEventListener('click', () => clearContent(contentAreaEl));
+
+    /**
+     * Load and display access token
+     */
+    function loadAccessToken() {
+        chrome.runtime.sendMessage({ action: 'get_access_token' }, (token) => {
+            if (token && !token.error) {
+                accessTokenEl.textContent = token;
+            } else {
+                accessTokenEl.textContent = 'Error loading token';
+            }
+        });
+    }
+
+    /**
+     * Copy access token to clipboard
+     */
+    function copyAccessToken() {
+        const token = accessTokenEl.textContent;
+        navigator.clipboard.writeText(token).then(() => {
+            showStatus(statusEl, 'success', 'Token copied to clipboard');
+            setTimeout(() => {
+                statusEl.className = 'status';
+            }, 2000);
+        }).catch(err => {
+            showStatus(statusEl, 'error', 'Failed to copy token');
+        });
+    }
+
+    /**
+     * Regenerate access token
+     */
+    function regenerateAccessToken() {
+        if (!confirm('Regenerate access token? You will need to update it in your MCP server and scripts.')) {
+            return;
+        }
+
+        chrome.runtime.sendMessage({ action: 'regenerate_access_token' }, (token) => {
+            if (token && !token.error) {
+                accessTokenEl.textContent = token;
+                showStatus(statusEl, 'success', 'Token regenerated successfully');
+            } else {
+                showStatus(statusEl, 'error', 'Failed to regenerate token');
+            }
+        });
+    }
 
     /**
      * Update the displayed tab title

@@ -14,6 +14,10 @@ Endpoints:
   GET    /                          - API documentation
 
 Port: 8888 (configurable)
+
+Access Control:
+  Requires Bearer token authentication for all API endpoints.
+  Configure valid tokens in ~/.chrome-tab-reader/tokens.json
 """
 
 import json
@@ -25,7 +29,7 @@ import time
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Set
 import logging
 
 # Set up logging
@@ -34,6 +38,36 @@ logging.basicConfig(
     format='[Chrome Tab Reader] %(levelname)s: %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Token configuration
+CONFIG_DIR = Path.home() / ".chrome-tab-reader"
+TOKENS_FILE = CONFIG_DIR / "tokens.json"
+
+def load_valid_tokens() -> Set[str]:
+    """Load valid access tokens from configuration file"""
+    if not TOKENS_FILE.exists():
+        logger.warning(f"Tokens file not found at {TOKENS_FILE}")
+        logger.info("Creating default tokens file. Please add your extension token.")
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        with open(TOKENS_FILE, 'w') as f:
+            json.dump({
+                "tokens": [],
+                "note": "Add your extension access token here. Get it from the extension popup."
+            }, f, indent=2)
+        return set()
+
+    try:
+        with open(TOKENS_FILE, 'r') as f:
+            data = json.load(f)
+            tokens = data.get("tokens", [])
+            logger.info(f"Loaded {len(tokens)} valid token(s)")
+            return set(tokens)
+    except Exception as e:
+        logger.error(f"Error loading tokens file: {e}")
+        return set()
+
+# Load valid tokens
+VALID_TOKENS = load_valid_tokens()
 
 
 class ChromeTabExtractor:
@@ -134,6 +168,24 @@ class ChromeTabExtractor:
 class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
     """HTTP request handler for Chrome Tab Reader API"""
 
+    def validate_token(self) -> bool:
+        """Validate Bearer token from Authorization header"""
+        auth_header = self.headers.get('Authorization', '')
+
+        if not auth_header.startswith('Bearer '):
+            return False
+
+        token = auth_header[7:]  # Remove 'Bearer ' prefix
+        return token in VALID_TOKENS
+
+    def send_unauthorized(self):
+        """Send 401 Unauthorized response"""
+        response = {
+            "error": "Unauthorized",
+            "message": "Valid Bearer token required. Configure tokens in ~/.chrome-tab-reader/tokens.json"
+        }
+        self.send_json_response(401, response)
+
     def do_GET(self):
         """Handle GET requests"""
         parsed_path = urlparse(self.path)
@@ -141,9 +193,18 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
 
         logger.info(f"GET {path}")
 
+        # Root path is public (API documentation)
         if path == "/":
             self.send_api_docs()
-        elif path == "/api/current_tab":
+            return
+
+        # All other endpoints require authentication
+        if not self.validate_token():
+            logger.warning(f"Unauthorized GET request to {path}")
+            self.send_unauthorized()
+            return
+
+        if path == "/api/current_tab":
             self.handle_current_tab()
         elif path == "/api/health":
             self.handle_health()
@@ -154,6 +215,12 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
         """Handle POST requests"""
         parsed_path = urlparse(self.path)
         path = parsed_path.path
+
+        # All POST endpoints require authentication
+        if not self.validate_token():
+            logger.warning(f"Unauthorized POST request to {path}")
+            self.send_unauthorized()
+            return
 
         # Read request body
         content_length = int(self.headers.get('Content-Length', 0))
@@ -220,6 +287,7 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
     <style>
         body { font-family: monospace; max-width: 800px; margin: 40px; }
         h1 { color: #333; }
+        .auth-notice { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px; }
         .endpoint { background: #f5f5f5; padding: 10px; margin: 10px 0; border-left: 3px solid #007bff; }
         .method { font-weight: bold; color: #007bff; }
         pre { background: #f9f9f9; padding: 10px; overflow-x: auto; }
@@ -229,6 +297,13 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
     <h1>Chrome Tab Reader HTTP API</h1>
 
     <p>Base URL: http://localhost:8888</p>
+
+    <div class="auth-notice">
+        <strong>Authentication Required</strong><br>
+        All API endpoints (except this documentation page) require Bearer token authentication.<br>
+        Get your token from the Chrome extension popup, then add it to:<br>
+        <code>~/.chrome-tab-reader/tokens.json</code>
+    </div>
 
     <h2>Endpoints</h2>
 
@@ -290,7 +365,21 @@ Response: (same as extract)</pre>
     <h2>Usage</h2>
     <pre>curl -X POST http://localhost:8888/api/extract \\
   -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \\
   -d '{"action": "extract_current_tab", "strategy": "three-phase"}'</pre>
+
+    <h2>Setup</h2>
+    <ol>
+        <li>Install the Chrome Tab Reader extension</li>
+        <li>Open the extension popup and copy your access token</li>
+        <li>Add the token to ~/.chrome-tab-reader/tokens.json:
+            <pre>{
+  "tokens": ["your-token-here"],
+  "note": "Get token from extension popup"
+}</pre>
+        </li>
+        <li>Start this server and include the token in all API requests</li>
+    </ol>
 
 </body>
 </html>
