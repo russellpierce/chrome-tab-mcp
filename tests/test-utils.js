@@ -118,14 +118,28 @@ async function launchBrowserWithExtension(options = {}) {
 
   const browser = await puppeteer.launch(launchOptions);
 
+  // Navigate to a simple page to trigger extension loading
+  const page = await browser.newPage();
+  await page.goto('about:blank', { waitUntil: 'domcontentloaded' });
+
   // Wait for extension to load and get extension ID
   let extensionId = null;
-  const maxRetries = 10;
+  const maxRetries = 20;
+
   for (let i = 0; i < maxRetries; i++) {
     const targets = await browser.targets();
-    const extensionTarget = targets.find(
+
+    // Try to find service worker
+    let extensionTarget = targets.find(
       target => target.type() === 'service_worker' && target.url().includes('chrome-extension://')
     );
+
+    // If no service worker, try to find extension background page or any extension page
+    if (!extensionTarget) {
+      extensionTarget = targets.find(
+        target => target.url().startsWith('chrome-extension://')
+      );
+    }
 
     if (extensionTarget) {
       const extensionUrl = extensionTarget.url();
@@ -137,6 +151,37 @@ async function launchBrowserWithExtension(options = {}) {
     // Wait before retrying
     await delay(500);
   }
+
+  // If still not found, try getting it from the manifest or page context
+  if (!extensionId) {
+    try {
+      // Navigate to a real page to trigger content script
+      await page.goto('https://example.com', { waitUntil: 'domcontentloaded', timeout: 10000 });
+      await delay(2000);
+
+      // Try to get extension ID from injected content script
+      extensionId = await page.evaluate(() => {
+        // Check if our extension's window API is available
+        if (window.__chromeTabReader__) {
+          // Extension is loaded, try to extract ID from any chrome-extension:// resources
+          const scripts = Array.from(document.querySelectorAll('script[src^="chrome-extension://"]'));
+          if (scripts.length > 0) {
+            const src = scripts[0].src;
+            return src.split('/')[2];
+          }
+        }
+        return null;
+      });
+
+      if (extensionId) {
+        console.log(`Extension ID extracted from page context: ${extensionId}`);
+      }
+    } catch (error) {
+      console.warn(`Failed to get extension ID from page context: ${error.message}`);
+    }
+  }
+
+  await page.close();
 
   if (!extensionId) {
     console.warn('Warning: Extension ID not found. Extension may not have loaded properly.');
