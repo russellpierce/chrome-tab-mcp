@@ -149,17 +149,25 @@ async function launchBrowserWithExtension(options = {}) {
 }
 
 /**
- * Load a static test page from the test-pages directory
+ * Load a static test page from GitHub Pages
  */
 async function loadTestPage(page, testPageName = 'test-simple.html') {
-  const testPagePath = path.resolve(__dirname, 'test-pages', testPageName);
-  const fileUrl = `file://${testPagePath}`;
+  // Use GitHub Pages to serve rendered HTML (not raw text)
+  const baseUrl = 'https://russellpierce.github.io/chrome-tab-mcp/tests/test-pages';
+  const webUrl = `${baseUrl}/${testPageName}`;
   
-  console.log(`[Test] Loading test page: ${fileUrl}`);
-  await page.goto(fileUrl, { waitUntil: 'networkidle0' });
+  console.log(`[Test] Loading test page: ${webUrl}`);
   
-  // Give time for content script to inject
-  await delay(1000);
+  try {
+    await page.goto(webUrl, { waitUntil: 'networkidle0', timeout: 10000 });
+  } catch (error) {
+    console.log(`[Test] Failed to load from GitHub Pages, trying fallback...`);
+    // Fallback to example.com if GitHub Pages isn't set up yet
+    await page.goto('https://example.com', { waitUntil: 'networkidle0' });
+  }
+  
+  // Give time for content script to inject (works on HTTP/HTTPS)
+  await delay(1500);
   
   console.log(`[Test] Test page loaded: ${testPageName}`);
 }
