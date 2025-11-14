@@ -1,0 +1,44 @@
+name: Pull Request Check
+
+on:
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  quick-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify extension files exist
+        run: npm test -- --testNamePattern="File Structure"
+
+      - name: Install Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser
+
+      - name: Run all tests
+        run: npm test
+        env:
+          CHROME_PATH: /usr/bin/chromium-browser
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "## Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Extension tests completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All automated tests have run on this PR." >> $GITHUB_STEP_SUMMARY

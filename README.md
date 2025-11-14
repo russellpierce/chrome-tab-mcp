@@ -1,27 +1,42 @@
 # Chrome Tab Reader
 
+![Test Extension](https://github.com/russellpierce/chrome-tab-mcp/actions/workflows/test-extension.yml/badge.svg)
+
 Extract and analyze content from Chrome tabs using AI. Supports multiple access methods: Chrome extension, HTTP API, and MCP server.
+
+## Features
+
+- **Three-Phase Content Extraction:**
+  1. Trigger lazy-loading by simulating scroll
+  2. Wait for DOM stability (handles dynamic content)
+  3. Extract clean content with Readability.js
+
+- **Intelligent Content Cleaning:** Removes navigation, ads, and footer content
+- **Keyword Filtering:** Extract content between specific keywords
+- **Token-Based Access Control:** Secure HTTP API with bearer token authentication
+- **Browser Extension UI:** Simple popup interface for content extraction
+- **Cross-Platform:** Works on Windows, macOS, and Linux
 
 ## Components
 
 This repository contains three ways to access Chrome tab content:
 
 ### 1. Chrome Extension (Recommended - Cross-platform)
-- **Browser extension** for Chrome/Chromium
+- Browser extension for Chrome/Chromium
 - Three-phase content extraction (lazy-loading, DOM stability, Readability.js)
 - Direct DOM access for reliable extraction
+- Generates secure access tokens for API authentication
 - Works on Windows, macOS, Linux
-- See: `extension/` directory
 
 ### 2. HTTP Server
-- **REST API** for programmatic access
+- REST API for programmatic access
 - Endpoints for content extraction and tab navigation
 - **Token-based authentication** for security
 - Can be called from scripts, MCP server, or other tools
 - See: `chrome_tab_http_server.py`
 
 ### 3. MCP Server (macOS only)
-- **Model Context Protocol** server for Claude Code
+- Model Context Protocol server for Claude Code
 - Uses AppleScript to extract tab content
 - Integrates with local Ollama AI models
 - See: `chrome_tab_mcp_server.py` and `README_MCP.md`
@@ -30,34 +45,89 @@ This repository contains three ways to access Chrome tab content:
 
 ### Extension Setup
 
-1. **Install the extension:**
+1. **Install dependencies:**
    ```bash
-   # Navigate to chrome://extensions/
-   # Enable "Developer mode"
-   # Click "Load unpacked"
-   # Select the extension/ directory
+   npm install
    ```
 
-2. **Get your access token:**
+2. **Load the extension in Chrome:**
+   - Open Chrome and go to `chrome://extensions/`
+   - Enable "Developer mode" (top right)
+   - Click "Load unpacked"
+   - Select the `extension/` directory
+   - Extension should appear with a green checkmark
+
+3. **Verify it works:**
+   - Navigate to any webpage (e.g., https://example.com)
+   - Click the extension icon
+   - Click "Extract Content"
+   - Content should appear in the popup
+
+### HTTP Server Setup (Optional)
+
+If you want to use the HTTP API:
+
+1. **Get your access token:**
    - Click the extension icon
    - Copy the access token shown at the top
 
-3. **Configure authentication (for HTTP server):**
+2. **Configure authentication:**
    ```bash
    ./setup_token.sh
    # Or manually create ~/.chrome-tab-reader/tokens.json
    ```
 
-4. **Start the HTTP server:**
+3. **Start the HTTP server:**
    ```bash
    python chrome_tab_http_server.py
    ```
 
-5. **Test it:**
+4. **Test it:**
    ```bash
    curl -H "Authorization: Bearer YOUR_TOKEN" \
         http://localhost:8888/api/health
    ```
+
+## Testing
+
+### Automated Tests (Recommended)
+
+Run automated tests to verify the extension works correctly:
+
+```bash
+npm test
+```
+
+This will:
+- ✅ Verify all extension files are present
+- ✅ Load the extension in Chrome
+- ✅ Test content extraction functionality
+- ✅ Test the UI and popup
+
+**Quick Start:** See [TESTING_QUICK_START.md](TESTING_QUICK_START.md)
+
+**Detailed Guide:** See [tests/README.md](tests/README.md)
+
+### Manual Testing
+
+For comprehensive manual testing, see:
+- `extension/TESTING.md` - Testing checklist
+- `BROWSER_EXTENSION_TESTING.md` - Detailed testing guide
+
+### Run Tests During Development
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test suite
+npm run test:install
+npm run test:extraction
+npm run test:ui
+
+# Watch mode (re-run on changes)
+npm run test:watch
+```
 
 ## Access Control
 
@@ -125,39 +195,64 @@ data = response.json()
 print(data['content'])
 ```
 
-## Architecture
+## Project Structure
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Chrome Browser                                 │
-│  ┌───────────────────────────────────────────┐  │
-│  │  Chrome Tab Reader Extension              │  │
-│  │  • Generates access token                 │  │
-│  │  • Extracts content (3-phase)             │  │
-│  │  • Displays in popup UI                   │  │
-│  └───────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────┘
-                    │
-                    │ Token displayed in UI
-                    │
-                    ▼
-┌─────────────────────────────────────────────────┐
-│  HTTP Server (localhost:8888)                   │
-│  • Validates bearer tokens                      │
-│  • Provides REST API                            │
-│  • Calls AppleScript (macOS)                    │
-│  • Or uses Chrome extension extraction          │
-└─────────────────────────────────────────────────┘
-                    │
-                    │ Authenticated requests
-                    │
-                    ▼
-┌─────────────────────────────────────────────────┐
-│  Your Scripts / MCP Server                      │
-│  • Include token in requests                    │
-│  • Process extracted content                    │
-└─────────────────────────────────────────────────┘
+chrome-tab-mcp/
+├── extension/              # Chrome extension files
+│   ├── manifest.json       # Extension manifest
+│   ├── content_script.js   # Content extraction logic
+│   ├── service_worker.js   # Background service worker (token gen)
+│   ├── popup.html          # Extension popup UI (shows token)
+│   ├── popup.js            # Popup logic
+│   └── lib/                # Third-party libraries
+│       ├── readability.min.js
+│       └── dompurify.min.js
+├── tests/                  # Automated tests
+│   ├── installation.test.js
+│   ├── extraction.test.js
+│   ├── ui.test.js
+│   └── test-utils.js
+├── chrome_tab_http_server.py  # HTTP API server (with auth)
+├── chrome_tab_mcp_server.py   # MCP server (macOS)
+├── setup_token.sh             # Token setup helper
+├── tokens.json.example        # Token config template
+└── package.json               # Node dependencies
 ```
+
+## CI/CD
+
+This project includes automated testing via GitHub Actions:
+
+- **Push/PR to main branches**: Runs full test suite on Node.js 20
+- **Pull Requests**: Quick validation tests with summary in PR
+- **Manual trigger**: Can be run manually from Actions tab
+
+### Running Tests in CI
+
+Tests automatically run on:
+- Push to `main`, `master`, `develop`, or `claude/*` branches
+- Pull requests to `main` or `master`
+- Manual workflow dispatch
+
+The CI environment:
+- Installs Chromium automatically
+- Runs all 32 tests
+- Generates coverage reports
+- Uploads test artifacts
+
+View workflow runs in the [Actions tab](https://github.com/russellpierce/chrome-tab-mcp/actions).
+
+## Security
+
+- ✅ Token-based authentication on all API endpoints
+- ✅ Cryptographically random 256-bit tokens
+- ✅ Tokens stored securely in Chrome extension storage
+- ✅ Server validates tokens on every request
+- ✅ Support for multiple tokens (different clients)
+- ✅ Easy token rotation/regeneration
+
+See [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md) for security best practices.
 
 ## Configuration Files
 
@@ -172,31 +267,6 @@ Start the HTTP server and visit:
 http://localhost:8888/
 ```
 
-## Security
-
-- ✅ Token-based authentication on all API endpoints
-- ✅ Cryptographically random 256-bit tokens
-- ✅ Tokens stored securely in Chrome extension storage
-- ✅ Server validates tokens on every request
-- ✅ Support for multiple tokens (different clients)
-- ✅ Easy token rotation/regeneration
-
-See [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md) for security best practices.
-
-## Files
-
-- `extension/` - Chrome extension source code
-  - `manifest.json` - Extension manifest (Manifest V3)
-  - `service_worker.js` - Background service worker (token generation)
-  - `content_script.js` - Content extraction logic (3-phase)
-  - `popup.html/js` - Extension UI (displays token)
-- `chrome_tab_http_server.py` - HTTP API server with token auth
-- `chrome_tab_mcp_server.py` - MCP server (macOS only)
-- `chrome_tab.scpt` - AppleScript for tab extraction (macOS)
-- `setup_token.sh` - Helper script for token configuration
-- `tokens.json.example` - Example tokens configuration
-- `ACCESS_CONTROL_SETUP.md` - Detailed security setup guide
-
 ## Platform Support
 
 | Component | Windows | macOS | Linux |
@@ -205,37 +275,72 @@ See [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md) for security best practic
 | HTTP Server | ✅ | ✅ | ✅ |
 | MCP Server | ❌ | ✅ | ❌ |
 
-## Design Documentation
+## Browser Support
 
-- [BROWSER_EXTENSION_DESIGN.md](BROWSER_EXTENSION_DESIGN.md) - Extension architecture
-- [BROWSER_EXTENSION_TESTING.md](BROWSER_EXTENSION_TESTING.md) - Testing guide
-- [DESIGN.md](DESIGN.md) - Overall design decisions
-- [README_MCP.md](README_MCP.md) - MCP server documentation
+- ✅ Chrome (v88+)
+- ✅ Edge (Chromium-based)
+- ✅ Brave
+- ❌ Firefox (Manifest v3 differences)
+
+## Requirements
+
+- Node.js v20 or higher (LTS recommended)
+- Chrome/Chromium browser
+- npm v10 or higher (comes with Node.js)
+- Python 3.8+ (for HTTP/MCP servers)
+
+## Documentation
+
+- **Extension Setup:** `extension/SETUP.md`
+- **Architecture:** `extension/ARCHITECTURE.md`
+- **Testing Guide:** `extension/TESTING.md`
+- **Test Documentation:** `tests/README.md`
+- **Quick Testing:** `TESTING_QUICK_START.md`
+- **Access Control:** `ACCESS_CONTROL_SETUP.md`
+- **MCP Server:** `README_MCP.md`
+- **Design Docs:** `BROWSER_EXTENSION_DESIGN.md`, `DESIGN.md`
 
 ## Troubleshooting
 
-### 401 Unauthorized Errors
+### Extension doesn't load
+- Check that all files exist in `extension/` directory
+- Look for errors in `chrome://extensions/`
+- Reload the extension after changes
 
+### Tests fail
+- Ensure Chrome/Chromium is installed
+- Run `npm install` to install dependencies
+- See `tests/README.md` for detailed troubleshooting
+
+### Content extraction doesn't work
+- Check browser console for errors
+- Verify Readability and DOMPurify are loaded
+- Try the "simple" strategy instead of "three-phase"
+
+### 401 Unauthorized Errors (HTTP API)
 - Verify token is correct (copy from extension popup)
 - Check `~/.chrome-tab-reader/tokens.json` contains your token
 - Restart HTTP server after updating tokens.json
 - Ensure `Authorization: Bearer YOUR_TOKEN` header format
 
 ### Extension Not Generating Token
-
 - Reload extension in chrome://extensions/
 - Check browser console (F12) for errors
 - Reinstall extension
 
-### HTTP Server Not Starting
+## Contributing
 
-- Check if port 8888 is already in use
-- Verify Python 3.8+ is installed
-- Check server logs for specific errors
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run `npm test` to verify everything works
+5. Submit a pull request
+
+All tests must pass before merging.
 
 ## License
 
-MIT
+ISC / MIT
 
 ## Author
 
