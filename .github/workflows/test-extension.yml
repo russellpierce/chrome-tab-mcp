@@ -1,0 +1,76 @@
+name: Test Chrome Extension
+
+on:
+  push:
+    branches: [ main, master, develop, claude/* ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser
+          chromium-browser --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run file structure tests
+        run: npm test -- --testNamePattern="File Structure"
+
+      - name: Run all tests
+        run: npm test
+        env:
+          CHROME_PATH: /usr/bin/chromium-browser
+
+      - name: Run installation tests
+        run: npm run test:install
+        env:
+          CHROME_PATH: /usr/bin/chromium-browser
+
+      - name: Run extraction tests
+        run: npm run test:extraction
+        env:
+          CHROME_PATH: /usr/bin/chromium-browser
+
+      - name: Run UI tests
+        run: npm run test:ui
+        env:
+          CHROME_PATH: /usr/bin/chromium-browser
+
+      - name: Generate coverage report
+        run: npm run test:coverage
+        env:
+          CHROME_PATH: /usr/bin/chromium-browser
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            coverage/
+            *.log
+          retention-days: 7
