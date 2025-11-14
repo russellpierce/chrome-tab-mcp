@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Readability Test Page</title>
+    <style>
+        .header { background: #333; color: white; padding: 20px; }
+        .navigation { background: #666; padding: 10px; }
+        .advertisements { background: #ff0; padding: 10px; border: 2px solid red; }
+        .main-article { max-width: 600px; margin: 20px auto; line-height: 1.6; }
+        .sidebar { float: right; width: 200px; background: #f0f0f0; }
+        .comments { background: #e0e0e0; padding: 20px; margin-top: 20px; }
+        .footer { background: #333; color: white; padding: 20px; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>Site Header</h1>
+        <p>This is the site header that should be removed by Readability.</p>
+    </header>
+    
+    <nav class="navigation">
+        <ul>
+            <li><a href="#link1">Navigation Link 1</a></li>
+            <li><a href="#link2">Navigation Link 2</a></li>
+            <li><a href="#link3">Navigation Link 3</a></li>
+        </ul>
+    </nav>
+    
+    <div class="advertisements">
+        <p><strong>Advertisement:</strong> Buy our product now! 50% off!</p>
+        <p>Click here for amazing deals!</p>
+    </div>
+    
+    <aside class="sidebar">
+        <h3>Related Articles</h3>
+        <ul>
+            <li><a href="#">Article 1</a></li>
+            <li><a href="#">Article 2</a></li>
+        </ul>
+        <div class="advertisements">
+            <p>Sidebar Advertisement</p>
+        </div>
+    </aside>
+    
+    <main class="main-article">
+        <h1>Main Article Title That Should Be Preserved</h1>
+        <p class="byline">By Test Author | Published on January 1, 2024</p>
+        
+        <p>This is the main article content that should be preserved and cleaned by Readability.js. It contains the primary content of the page.</p>
+        
+        <p>This article has multiple paragraphs with substantive content that readers care about. Readability should identify this as the main content and remove navigation, ads, and other non-essential elements.</p>
+        
+        <h2>Article Subsection</h2>
+        <p>This subsection contains more valuable content with proper formatting and structure.</p>
+        
+        <blockquote>
+            <p>"This quote should be preserved as it's part of the main content."</p>
+            <cite>- Important Source</cite>
+        </blockquote>
+        
+        <p>The article continues with more paragraphs that provide value to readers. This content should survive the Readability cleaning process.</p>
+        
+        <ul>
+            <li>Important point 1</li>
+            <li>Important point 2</li>
+            <li>Important point 3</li>
+        </ul>
+        
+        <p>Final paragraph of the main article content that wraps up the topic.</p>
+    </main>
+    
+    <section class="comments">
+        <h3>Comments</h3>
+        <div class="comment">
+            <p><strong>User1:</strong> This is a comment that should be removed.</p>
+        </div>
+        <div class="comment">
+            <p><strong>User2:</strong> Another comment to be filtered out.</p>
+        </div>
+    </section>
+    
+    <footer class="footer">
+        <p>&copy; 2024 Test Site. All rights reserved.</p>
+        <p>Footer links and information that should be removed.</p>
+    </footer>
+    
+    <script>
+        // This script should be removed by DOMPurify
+        console.log('This script should be sanitized');
+    </script>
+</body>
+</html>

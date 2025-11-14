@@ -2,6 +2,9 @@ const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
 
+// Load environment variables from .env file
+require('dotenv').config();
+
 /**
  * Test utilities for Chrome extension testing
  */
@@ -92,13 +95,18 @@ async function launchBrowserWithExtension(options = {}) {
 
   console.log(`Using Chrome at: ${executablePath}`);
 
-  // Launch Chrome with extension loaded (headful mode for local testing)
+  // Use the modern Puppeteer extension API
   const launchOptions = {
-    headless: false, // Extensions work best in headful mode
+    headless: false, // Extensions require headful mode
     executablePath,
+    pipe: true, // Required for enableExtensions
+    enableExtensions: [extensionPath],
     args: [
-      `--disable-extensions-except=${extensionPath}`,
-      `--load-extension=${extensionPath}`,
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--no-default-browser-check',
+      '--no-first-run',
       ...(options.args || [])
     ],
     dumpio: false,
@@ -107,52 +115,76 @@ async function launchBrowserWithExtension(options = {}) {
 
   const browser = await puppeteer.launch(launchOptions);
 
-  // Wait briefly for extension to load
-  await delay(1000);
-
-  // Get extension ID from service worker
+  // Wait for extension to load using the service worker file
   let extensionId = null;
-  const targets = await browser.targets();
-  const extensionTarget = targets.find(
-    target => target.type() === 'service_worker' && target.url().includes('chrome-extension://')
-  );
-
-  if (extensionTarget) {
-    const extensionUrl = extensionTarget.url();
+  try {
+    console.log('Waiting for extension service worker to load...');
+    const serviceWorkerTarget = await browser.waitForTarget(
+      target => target.type() === 'service_worker' && target.url().endsWith('service_worker.js'),
+      { timeout: 15000 }
+    );
+    
+    const extensionUrl = serviceWorkerTarget.url();
     extensionId = extensionUrl.split('/')[2];
     console.log(`Extension loaded with ID: ${extensionId}`);
-  } else {
-    console.warn('Warning: Extension service worker not found. Tests may fail.');
+  } catch (error) {
+    console.warn('Warning: Extension service worker not found within timeout. Checking for any chrome-extension targets...');
+    
+    // Fallback: look for any chrome-extension target
+    const targets = await browser.targets();
+    const extensionTarget = targets.find(
+      target => target.url().includes('chrome-extension://')
+    );
+    
+    if (extensionTarget) {
+      const extensionUrl = extensionTarget.url();
+      extensionId = extensionUrl.split('/')[2];
+      console.log(`Extension found with ID: ${extensionId} (type: ${extensionTarget.type()})`);
+    } else {
+      console.warn('Warning: No extension targets found. Tests may fail.');
+    }
   }
 
   return { browser, extensionId };
 }
 
 /**
- * Create a test page with specific content
+ * Load a static test page from the test-pages directory
+ */
+async function loadTestPage(page, testPageName = 'test-simple.html') {
+  const testPagePath = path.resolve(__dirname, 'test-pages', testPageName);
+  const fileUrl = `file://${testPagePath}`;
+  
+  console.log(`[Test] Loading test page: ${fileUrl}`);
+  await page.goto(fileUrl, { waitUntil: 'networkidle0' });
+  
+  // Give time for content script to inject
+  await delay(1000);
+  
+  console.log(`[Test] Test page loaded: ${testPageName}`);
+}
+
+/**
+ * Create a test page with specific content (legacy function - now uses static pages)
  */
 async function createTestPage(page, options = {}) {
   const {
+    type = 'simple', // simple, complex, keywords, readability
     title = 'Test Page',
     content = '<h1>Test Content</h1><p>This is a test page.</p>',
     scripts = []
   } = options;
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>${title}</title>
-</head>
-<body>
-  ${content}
-  ${scripts.map(script => `<script>${script}</script>`).join('\n')}
-</body>
-</html>
-  `;
-
-  await page.setContent(html, { waitUntil: 'networkidle0' });
+  // Map content types to static test pages
+  const testPageMap = {
+    'simple': 'test-simple.html',
+    'complex': 'test-complex.html', 
+    'keywords': 'test-keywords.html',
+    'readability': 'test-readability.html'
+  };
+  
+  const testPageName = testPageMap[type] || 'test-simple.html';
+  await loadTestPage(page, testPageName);
 }
 
 /**
@@ -217,19 +249,31 @@ async function openPopup(browser, extensionId) {
  * Wait for content script to be ready
  * In headful mode this should be quick
  */
-async function waitForContentScript(page, timeoutMs = 5000) {
+async function waitForContentScript(page, timeoutMs = 15000) {
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeoutMs) {
-    const isReady = await page.evaluate(() => {
-      return typeof window.__chromeTabReader__ !== 'undefined';
-    });
+    try {
+      const isReady = await page.evaluate(() => {
+        // Check if the content script global is available
+        if (typeof window.__chromeTabReader__ !== 'undefined') {
+          return true;
+        }
+        
+        // Check if content script console logs suggest it's loading
+        return document.readyState === 'complete' && 
+               (window.Readability !== undefined || window.DOMPurify !== undefined);
+      });
 
-    if (isReady) {
-      return true;
+      if (isReady) {
+        console.log('[Test] Content script is ready');
+        return true;
+      }
+    } catch (error) {
+      // Ignore evaluation errors and continue waiting
     }
 
-    await delay(100);
+    await delay(200);
   }
 
   throw new Error('Content script did not load within timeout. Make sure Chrome has the extension loaded.');
@@ -269,15 +313,45 @@ async function checkLibrariesLoaded(page) {
   await waitForContentScript(page);
 
   return await page.evaluate(() => {
-    if (!window.__chromeTabReader__) {
-      return {
-        readability: false,
-        dompurify: false
-      };
+    // First check if the content script API is available
+    if (window.__chromeTabReader__ && window.__chromeTabReader__.checkLibraries) {
+      return window.__chromeTabReader__.checkLibraries();
     }
 
-    return window.__chromeTabReader__.checkLibraries();
+    // Fallback: check if libraries are directly available in global scope
+    return {
+      readability: typeof window.Readability !== 'undefined',
+      dompurify: typeof window.DOMPurify !== 'undefined'
+    };
   });
+}
+
+/**
+ * Test extension against a real website
+ */
+async function testAgainstRealSite(browser, url = 'https://github.com/russellpierce/chrome-tab-mcp') {
+  const page = await browser.newPage();
+  
+  try {
+    console.log(`Navigating to: ${url}`);
+    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+    
+    // Wait longer for content script to load on real sites
+    console.log('Waiting for content script to initialize...');
+    await waitForContentScript(page, 15000); // Increased timeout
+    
+    // Test content extraction with simple strategy first
+    console.log('Testing content extraction...');
+    const result = await extractContent(page, { strategy: 'simple' });
+    
+    console.log('Successfully extracted content from real site');
+    console.log(`Title: ${result.title}`);
+    console.log(`Content length: ${result.content.length} characters`);
+    
+    return result;
+  } finally {
+    await page.close();
+  }
 }
 
 module.exports = {
@@ -285,11 +359,13 @@ module.exports = {
   getExtensionPath,
   verifyExtensionFiles,
   launchBrowserWithExtension,
+  loadTestPage,
   createTestPage,
   waitForExtension,
   waitForContentScript,
   getServiceWorker,
   openPopup,
   extractContent,
-  checkLibrariesLoaded
+  checkLibrariesLoaded,
+  testAgainstRealSite
 };

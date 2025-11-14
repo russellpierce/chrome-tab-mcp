@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complex Test Page</title>
+    <style>
+        nav { background: #f0f0f0; padding: 10px; }
+        .sidebar { float: right; width: 200px; background: #e0e0e0; }
+        .main-content { margin-right: 220px; }
+        footer { clear: both; background: #d0d0d0; padding: 10px; }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="#home">Home</a></li>
+            <li><a href="#about">About</a></li>
+            <li><a href="#contact">Contact</a></li>
+        </ul>
+    </nav>
+    
+    <div class="sidebar">
+        <h3>Sidebar</h3>
+        <p>This is sidebar content that should be filtered out by Readability.</p>
+        <ul>
+            <li>Navigation item 1</li>
+            <li>Navigation item 2</li>
+        </ul>
+    </div>
+    
+    <div class="main-content">
+        <h1>Complex Test Page</h1>
+        <p>This is a complex test page with navigation, sidebar, and main content.</p>
+        
+        <article>
+            <h2>Article Title</h2>
+            <p>This is the main article content that should be extracted and cleaned by Readability.js.</p>
+            <p>It contains multiple paragraphs with various HTML elements like <a href="#">links</a>, <strong>bold text</strong>, and <em>emphasis</em>.</p>
+            
+            <h3>Subsection</h3>
+            <p>More content in a subsection to test hierarchical content extraction.</p>
+            
+            <blockquote>
+                <p>A quote that should be preserved in the cleaned content.</p>
+            </blockquote>
+        </article>
+    </div>
+    
+    <footer>
+        <p>&copy; 2024 Test Page. This footer should be filtered out.</p>
+        <p>More footer content with navigation and links.</p>
+    </footer>
+</body>
+</html>

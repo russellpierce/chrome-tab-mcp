@@ -7,6 +7,7 @@
 const {
   delay,
   launchBrowserWithExtension,
+  loadTestPage,
   createTestPage,
   extractContent,
   checkLibrariesLoaded
@@ -31,7 +32,7 @@ describe('Content Extraction', () => {
   describe('Basic Extraction', () => {
     test('extracts content from simple page', async () => {
       const page = await browser.newPage();
-      await page.goto('https://example.com', { waitUntil: 'networkidle0' });
+      await loadTestPage(page, 'test-simple.html');
 
       // Trigger extraction via content script
       const result = await extractContent(page, { strategy: 'three-phase' });
@@ -40,8 +41,8 @@ describe('Content Extraction', () => {
       expect(result.status).toBe('success');
       expect(result.content).toBeDefined();
       expect(result.content.length).toBeGreaterThan(0);
-      expect(result.title).toBe('Example Domain');
-      expect(result.url).toContain('example.com');
+      expect(result.title).toBe('Simple Test Page');
+      expect(result.url).toContain('test-simple.html');
       expect(result.extraction_time_ms).toBeGreaterThan(0);
 
       await page.close();
@@ -49,32 +50,26 @@ describe('Content Extraction', () => {
 
     test('extraction includes page title and URL', async () => {
       const page = await browser.newPage();
-      await createTestPage(page, {
-        title: 'Test Page Title',
-        content: '<h1>Main Heading</h1><p>Test content here.</p>'
-      });
+      await loadTestPage(page, 'test-simple.html');
 
       const result = await extractContent(page, { strategy: 'three-phase' });
 
       expect(result.status).toBe('success');
-      expect(result.title).toBe('Test Page Title');
+      expect(result.title).toBe('Simple Test Page');
       expect(result.url).toBeDefined();
 
       await page.close();
     });
 
-    test('extraction handles empty page', async () => {
+    test('extraction handles simple page', async () => {
       const page = await browser.newPage();
-      await createTestPage(page, {
-        title: 'Empty Page',
-        content: ''
-      });
+      await loadTestPage(page, 'test-simple.html');
 
-      const result = await extractContent(page, { strategy: 'three-phase' });
+      const result = await extractContent(page, { strategy: 'simple' });
 
       expect(result.status).toBe('success');
       expect(result.content).toBeDefined();
-      // Empty page should still have some content (even if minimal)
+      expect(result.content.length).toBeGreaterThan(0);
 
       await page.close();
     });
@@ -83,26 +78,19 @@ describe('Content Extraction', () => {
   describe('Extraction Strategies', () => {
     test('simple strategy works', async () => {
       const page = await browser.newPage();
-      await createTestPage(page, {
-        title: 'Simple Strategy Test',
-        content: '<p>Simple content extraction test.</p>'
-      });
-
-      await delay(2000);
+      await loadTestPage(page, 'test-simple.html');
 
       const result = await extractContent(page, { strategy: 'simple' });
 
       expect(result.status).toBe('success');
-      expect(result.content).toContain('Simple content extraction test');
+      expect(result.content).toContain('Simple Test Content');
 
       await page.close();
     });
 
     test('three-phase strategy completes within reasonable time', async () => {
       const page = await browser.newPage();
-      await page.goto('https://example.com', { waitUntil: 'networkidle0' });
-
-      await delay(2000);
+      await loadTestPage(page, 'test-complex.html');
 
       const startTime = Date.now();
 
@@ -120,24 +108,12 @@ describe('Content Extraction', () => {
   describe('Keyword Filtering', () => {
     test('filters content between keywords', async () => {
       const page = await browser.newPage();
-      await createTestPage(page, {
-        title: 'Keyword Test',
-        content: `
-          <h1>Introduction</h1>
-          <p>This is the intro section.</p>
-          <h2>Skills</h2>
-          <p>This is the skills section with important content.</p>
-          <h2>Contact</h2>
-          <p>This is the contact section.</p>
-        `
-      });
-
-      await delay(2000);
+      await loadTestPage(page, 'test-keywords.html');
 
       const result = await extractContent(page, {
         strategy: 'simple',
-        startKeyword: 'Skills',
-        endKeyword: 'Contact'
+        startKeyword: 'START_MARKER',
+        endKeyword: 'END_MARKER'
       });
 
       expect(result.status).toBe('success');

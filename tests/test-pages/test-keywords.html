@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keywords Test Page</title>
+</head>
+<body>
+    <h1>Keywords Test Page</h1>
+    
+    <p>This content appears before the start keyword and should not be included in keyword filtering.</p>
+    <p>Some more content before the marker.</p>
+    
+    <div>
+        <p>START_MARKER: This content should be included when filtering between START_MARKER and END_MARKER.</p>
+        <p>This paragraph is within the keyword range and should be extracted.</p>
+        <p>Another paragraph with important content between the markers.</p>
+        <p>This is also included content with <strong>formatting</strong>.</p>
+        <p>END_MARKER: This marker indicates the end of the content to extract.</p>
+    </div>
+    
+    <p>This content appears after the end keyword and should not be included in keyword filtering.</p>
+    <p>Final content that should be excluded.</p>
+    
+    <!-- Test case insensitive matching -->
+    <div style="margin-top: 50px;">
+        <h2>Case Insensitive Test</h2>
+        <p>Content before case test.</p>
+        <p>start_marker: Beginning of case insensitive test content.</p>
+        <p>This should be included in case insensitive matching.</p>
+        <p>end_marker: End of case insensitive test content.</p>
+        <p>Content after case test.</p>
+    </div>
+</body>
+</html>
