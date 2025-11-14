@@ -55,6 +55,9 @@ describe('Extension UI', () => {
       // Check for key UI elements
       const elements = await popup.evaluate(() => {
         return {
+          hasAccessToken: !!document.getElementById('accessToken'),
+          hasCopyTokenBtn: !!document.getElementById('copyTokenBtn'),
+          hasRegenerateTokenBtn: !!document.getElementById('regenerateTokenBtn'),
           hasTabTitle: !!document.getElementById('tabTitle'),
           hasExtractBtn: !!document.getElementById('extractBtn'),
           hasClearBtn: !!document.getElementById('clearBtn'),
@@ -63,6 +66,9 @@ describe('Extension UI', () => {
         };
       });
 
+      expect(elements.hasAccessToken).toBe(true);
+      expect(elements.hasCopyTokenBtn).toBe(true);
+      expect(elements.hasRegenerateTokenBtn).toBe(true);
       expect(elements.hasTabTitle).toBe(true);
       expect(elements.hasExtractBtn).toBe(true);
       expect(elements.hasClearBtn).toBe(true);
@@ -179,6 +185,77 @@ describe('Extension UI', () => {
 
       await popup.close();
       await page.close();
+    });
+  });
+
+  describe('Access Token', () => {
+    test('access token is displayed', async () => {
+      const popup = await openPopup(browser, extensionId);
+      await popup.waitForTimeout(1500);
+
+      const tokenText = await popup.evaluate(() => {
+        return document.getElementById('accessToken').textContent;
+      });
+
+      expect(tokenText).toBeDefined();
+      expect(tokenText.length).toBeGreaterThan(0);
+      expect(tokenText).not.toBe('Loading...');
+      expect(tokenText).not.toBe('Error loading token');
+      // Token should be 64 hex characters
+      expect(tokenText).toMatch(/^[0-9a-f]{64}$/);
+
+      await popup.close();
+    });
+
+    test('copy token button works', async () => {
+      const popup = await openPopup(browser, extensionId);
+      await popup.waitForTimeout(1500);
+
+      // Check button exists and is enabled
+      const buttonEnabled = await popup.evaluate(() => {
+        const btn = document.getElementById('copyTokenBtn');
+        return btn && !btn.disabled;
+      });
+
+      expect(buttonEnabled).toBe(true);
+
+      await popup.close();
+    });
+
+    test('regenerate token button works', async () => {
+      const popup = await openPopup(browser, extensionId);
+      await popup.waitForTimeout(1500);
+
+      // Check button exists and is enabled
+      const buttonEnabled = await popup.evaluate(() => {
+        const btn = document.getElementById('regenerateTokenBtn');
+        return btn && !btn.disabled;
+      });
+
+      expect(buttonEnabled).toBe(true);
+
+      await popup.close();
+    });
+
+    test('can retrieve token via service worker', async () => {
+      const popup = await openPopup(browser, extensionId);
+      await popup.waitForTimeout(1000);
+
+      const token = await popup.evaluate(() => {
+        return new Promise((resolve) => {
+          chrome.runtime.sendMessage({
+            action: 'get_access_token'
+          }, (response) => {
+            resolve(response);
+          });
+        });
+      });
+
+      expect(token).toBeDefined();
+      expect(typeof token).toBe('string');
+      expect(token).toMatch(/^[0-9a-f]{64}$/);
+
+      await popup.close();
     });
   });
 
