@@ -83,8 +83,13 @@ async function launchBrowserWithExtension(options = {}) {
 
   console.log(`Using Chrome at: ${executablePath}`);
 
+  // Use new headless mode in CI (supports extensions)
+  // In local dev, use headful mode for debugging
+  const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
+  const headlessMode = isCI ? 'new' : false;
+
   const launchOptions = {
-    headless: false, // Extensions don't work in headless mode
+    headless: headlessMode,
     executablePath,
     args: [
       `--disable-extensions-except=${extensionPath}`,
