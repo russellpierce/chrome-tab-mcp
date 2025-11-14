@@ -1,5 +1,7 @@
 # Chrome Tab Reader Extension
 
+![Test Extension](https://github.com/russellpierce/chrome-tab-mcp/actions/workflows/test-extension.yml/badge.svg)
+
 A Chrome extension that extracts and analyzes webpage content with AI assistance using a three-phase extraction process.
 
 ## Features
@@ -81,6 +83,29 @@ chrome-tab-mcp/
 │   └── test-utils.js
 └── package.json            # Node dependencies
 ```
+
+## CI/CD
+
+This project includes automated testing via GitHub Actions:
+
+- **Push/PR to main branches**: Runs full test suite on Node.js 18 and 20
+- **Pull Requests**: Quick validation tests with summary in PR
+- **Manual trigger**: Can be run manually from Actions tab
+
+### Running Tests in CI
+
+Tests automatically run on:
+- Push to `main`, `master`, `develop`, or `claude/*` branches
+- Pull requests to `main` or `master`
+- Manual workflow dispatch
+
+The CI environment:
+- Installs Chromium automatically
+- Runs all 32 tests
+- Generates coverage reports
+- Uploads test artifacts
+
+View workflow runs in the [Actions tab](https://github.com/russellpierce/chrome-tab-mcp/actions).
 
 ## Development
 

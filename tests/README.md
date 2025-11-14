@@ -270,40 +270,51 @@ PUPPETEER_SKIP_DOWNLOAD=true npm install
 
 ## Running Tests in CI/CD
 
-For automated testing in CI/CD pipelines:
+This project includes automated GitHub Actions workflows:
+
+### Workflows Included
+
+1. **`test-extension.yml`** - Comprehensive testing
+   - Runs on push to main branches and PRs
+   - Tests on Node.js 18 and 20
+   - Installs Chromium automatically
+   - Runs all test suites
+   - Generates coverage reports
+   - Can be triggered manually
+
+2. **`pr-check.yml`** - Quick PR validation
+   - Runs on pull requests
+   - Fast validation of changes
+   - Adds test summary to PR
+
+### Viewing Test Results
+
+Visit the [GitHub Actions tab](https://github.com/russellpierce/chrome-tab-mcp/actions) to see:
+- Test run history
+- Coverage reports
+- Test artifacts
+- Workflow logs
+
+### Running Locally Like CI
+
+To run tests exactly as CI does:
 
 ```bash
-# Install dependencies
+# Install dependencies (CI mode - uses package-lock.json)
 npm ci
 
-# Run tests in CI mode
-CI=true npm test
+# Install Chromium (Ubuntu/Debian)
+sudo apt-get update
+sudo apt-get install -y chromium-browser
+
+# Run tests with explicit Chrome path
+CHROME_PATH=/usr/bin/chromium-browser npm test
 ```
 
-### GitHub Actions Example
+### Workflow Files
 
-```yaml
-name: Test Extension
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - name: Install Chrome
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium-browser
-      - name: Install dependencies
-        run: npm ci
-      - name: Run tests
-        run: npm test
-        env:
-          CHROME_PATH: /usr/bin/chromium-browser
-```
+- `.github/workflows/test-extension.yml` - Main test workflow
+- `.github/workflows/pr-check.yml` - PR validation workflow
 
 ## Writing New Tests
 
