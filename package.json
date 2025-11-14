@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:install": "jest tests/installation.test.js",
+    "test:extraction": "jest tests/extraction.test.js",
+    "test:ui": "jest tests/ui.test.js",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "repository": {
     "type": "git",
@@ -16,5 +21,12 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "dompurify": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.28",
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0",
+    "jest-environment-node": "^30.2.0",
+    "puppeteer": "^24.30.0"
   }
 }
