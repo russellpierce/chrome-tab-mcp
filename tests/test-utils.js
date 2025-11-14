@@ -92,24 +92,13 @@ async function launchBrowserWithExtension(options = {}) {
 
   console.log(`Using Chrome at: ${executablePath}`);
 
-  // Use new headless mode in CI (supports extensions)
-  // In local dev, use headful mode for debugging
-  const isCI = process.env.CI === 'true' || process.env.GITHUB_ACTIONS === 'true';
-  const headlessMode = isCI ? 'new' : false;
-
+  // Launch Chrome with extension loaded (headful mode for local testing)
   const launchOptions = {
-    headless: headlessMode,
+    headless: false, // Extensions work best in headful mode
     executablePath,
     args: [
       `--disable-extensions-except=${extensionPath}`,
       `--load-extension=${extensionPath}`,
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
       ...(options.args || [])
     ],
     dumpio: false,
@@ -118,73 +107,22 @@ async function launchBrowserWithExtension(options = {}) {
 
   const browser = await puppeteer.launch(launchOptions);
 
-  // Navigate to a simple page to trigger extension loading
-  const page = await browser.newPage();
-  await page.goto('about:blank', { waitUntil: 'domcontentloaded' });
+  // Wait briefly for extension to load
+  await delay(1000);
 
-  // Wait for extension to load and get extension ID
+  // Get extension ID from service worker
   let extensionId = null;
-  const maxRetries = 20;
+  const targets = await browser.targets();
+  const extensionTarget = targets.find(
+    target => target.type() === 'service_worker' && target.url().includes('chrome-extension://')
+  );
 
-  for (let i = 0; i < maxRetries; i++) {
-    const targets = await browser.targets();
-
-    // Try to find service worker
-    let extensionTarget = targets.find(
-      target => target.type() === 'service_worker' && target.url().includes('chrome-extension://')
-    );
-
-    // If no service worker, try to find extension background page or any extension page
-    if (!extensionTarget) {
-      extensionTarget = targets.find(
-        target => target.url().startsWith('chrome-extension://')
-      );
-    }
-
-    if (extensionTarget) {
-      const extensionUrl = extensionTarget.url();
-      extensionId = extensionUrl.split('/')[2]; // Extract extension ID from URL
-      console.log(`Extension loaded with ID: ${extensionId}`);
-      break;
-    }
-
-    // Wait before retrying
-    await delay(500);
-  }
-
-  // If still not found, try getting it from the manifest or page context
-  if (!extensionId) {
-    try {
-      // Navigate to a real page to trigger content script
-      await page.goto('https://example.com', { waitUntil: 'domcontentloaded', timeout: 10000 });
-      await delay(2000);
-
-      // Try to get extension ID from injected content script
-      extensionId = await page.evaluate(() => {
-        // Check if our extension's window API is available
-        if (window.__chromeTabReader__) {
-          // Extension is loaded, try to extract ID from any chrome-extension:// resources
-          const scripts = Array.from(document.querySelectorAll('script[src^="chrome-extension://"]'));
-          if (scripts.length > 0) {
-            const src = scripts[0].src;
-            return src.split('/')[2];
-          }
-        }
-        return null;
-      });
-
-      if (extensionId) {
-        console.log(`Extension ID extracted from page context: ${extensionId}`);
-      }
-    } catch (error) {
-      console.warn(`Failed to get extension ID from page context: ${error.message}`);
-    }
-  }
-
-  await page.close();
-
-  if (!extensionId) {
-    console.warn('Warning: Extension ID not found. Extension may not have loaded properly.');
+  if (extensionTarget) {
+    const extensionUrl = extensionTarget.url();
+    extensionId = extensionUrl.split('/')[2];
+    console.log(`Extension loaded with ID: ${extensionId}`);
+  } else {
+    console.warn('Warning: Extension service worker not found. Tests may fail.');
   }
 
   return { browser, extensionId };
@@ -277,8 +215,9 @@ async function openPopup(browser, extensionId) {
 
 /**
  * Wait for content script to be ready
+ * In headful mode this should be quick
  */
-async function waitForContentScript(page, timeoutMs = 10000) {
+async function waitForContentScript(page, timeoutMs = 5000) {
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeoutMs) {
@@ -293,7 +232,7 @@ async function waitForContentScript(page, timeoutMs = 10000) {
     await delay(100);
   }
 
-  throw new Error('Content script did not load within timeout');
+  throw new Error('Content script did not load within timeout. Make sure Chrome has the extension loaded.');
 }
 
 /**
