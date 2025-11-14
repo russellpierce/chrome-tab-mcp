@@ -88,7 +88,7 @@ chrome-tab-mcp/
 
 This project includes automated testing via GitHub Actions:
 
-- **Push/PR to main branches**: Runs full test suite on Node.js 18 and 20
+- **Push/PR to main branches**: Runs full test suite on Node.js 20
 - **Pull Requests**: Quick validation tests with summary in PR
 - **Manual trigger**: Can be run manually from Actions tab
 
@@ -151,9 +151,9 @@ All tests should pass before submitting a pull request.
 
 ## Requirements
 
-- Node.js v14 or higher
+- Node.js v20 or higher (LTS recommended)
 - Chrome/Chromium browser
-- npm (comes with Node.js)
+- npm v10 or higher (comes with Node.js)
 
 ## Troubleshooting
 

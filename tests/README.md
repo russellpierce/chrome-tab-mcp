@@ -14,10 +14,12 @@ The test suite includes:
 
 ### Required Software
 
-1. **Node.js** (v14 or higher)
+1. **Node.js** (v20 or higher, LTS recommended)
    ```bash
    node --version
    ```
+
+   Install from: https://nodejs.org/ (choose the LTS version)
 
 2. **Chrome or Chromium** browser installed at one of these paths:
    - `/usr/bin/google-chrome`
@@ -276,7 +278,7 @@ This project includes automated GitHub Actions workflows:
 
 1. **`test-extension.yml`** - Comprehensive testing
    - Runs on push to main branches and PRs
-   - Tests on Node.js 18 and 20
+   - Tests on Node.js 20 (LTS)
    - Installs Chromium automatically
    - Runs all test suites
    - Generates coverage reports

@@ -1,8 +1,12 @@
 {
   "name": "chrome-tab-mcp",
   "version": "1.0.0",
-  "description": "",
+  "description": "Chrome extension for extracting and analyzing webpage content with AI assistance",
   "main": "index.js",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "test": "jest",
     "test:install": "jest tests/installation.test.js",
@@ -15,7 +19,13 @@
     "type": "git",
     "url": "http://local_proxy@127.0.0.1:46788/git/russellpierce/chrome-tab-mcp"
   },
-  "keywords": [],
+  "keywords": [
+    "chrome-extension",
+    "content-extraction",
+    "readability",
+    "web-scraping",
+    "ai"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {

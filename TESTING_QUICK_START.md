@@ -4,9 +4,16 @@ This guide will help you quickly run automated tests to verify the Chrome Tab Re
 
 ## Prerequisites
 
-- Node.js installed (v14+)
+- Node.js v20 or higher (LTS recommended)
 - Chrome or Chromium browser installed
 - Terminal/command line access
+
+**Check your Node version:**
+```bash
+node --version  # Should show v20.x.x or higher
+```
+
+If you need to install/update Node.js, visit: https://nodejs.org/
 
 ## Quick Test (3 minutes)
 
