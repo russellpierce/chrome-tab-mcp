@@ -7,6 +7,15 @@ const fs = require('fs');
  */
 
 /**
+ * Delay helper function to replace deprecated page.waitForTimeout()
+ * @param {number} ms - Milliseconds to wait
+ * @returns {Promise}
+ */
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
  * Get the path to the extension directory
  */
 function getExtensionPath() {
@@ -228,6 +237,7 @@ async function checkLibrariesLoaded(page) {
 }
 
 module.exports = {
+  delay,
   getExtensionPath,
   verifyExtensionFiles,
   launchBrowserWithExtension,

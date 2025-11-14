@@ -5,6 +5,7 @@
  */
 
 const {
+  delay,
   launchBrowserWithExtension,
   createTestPage,
   checkLibrariesLoaded
@@ -32,7 +33,7 @@ describe('Content Extraction', () => {
       await page.goto('https://example.com', { waitUntil: 'networkidle0' });
 
       // Wait for content script to load
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       // Trigger extraction via content script
       const result = await page.evaluate(() => {
@@ -64,7 +65,7 @@ describe('Content Extraction', () => {
         content: '<h1>Main Heading</h1><p>Test content here.</p>'
       });
 
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const result = await page.evaluate(() => {
         return new Promise((resolve) => {
@@ -91,7 +92,7 @@ describe('Content Extraction', () => {
         content: ''
       });
 
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const result = await page.evaluate(() => {
         return new Promise((resolve) => {
@@ -120,7 +121,7 @@ describe('Content Extraction', () => {
         content: '<p>Simple content extraction test.</p>'
       });
 
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const result = await page.evaluate(() => {
         return new Promise((resolve) => {
@@ -143,7 +144,7 @@ describe('Content Extraction', () => {
       const page = await browser.newPage();
       await page.goto('https://example.com', { waitUntil: 'networkidle0' });
 
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const startTime = Date.now();
 
@@ -182,7 +183,7 @@ describe('Content Extraction', () => {
         `
       });
 
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const result = await page.evaluate(() => {
         return new Promise((resolve) => {
@@ -217,7 +218,7 @@ describe('Content Extraction', () => {
         `
       });
 
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const result = await page.evaluate(() => {
         return new Promise((resolve) => {
@@ -264,7 +265,7 @@ describe('Content Extraction', () => {
         `
       });
 
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const result = await page.evaluate(() => {
         return new Promise((resolve) => {
@@ -302,7 +303,7 @@ describe('Content Extraction', () => {
         ]
       });
 
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const result = await page.evaluate(() => {
         return new Promise((resolve) => {
@@ -344,7 +345,7 @@ describe('Content Extraction', () => {
         `
       });
 
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const result = await page.evaluate(() => {
         return new Promise((resolve) => {
@@ -368,7 +369,7 @@ describe('Content Extraction', () => {
     test('Readability is available', async () => {
       const page = await browser.newPage();
       await page.goto('https://example.com', { waitUntil: 'networkidle0' });
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const libs = await checkLibrariesLoaded(page);
       expect(libs.readability).toBe(true);
@@ -379,7 +380,7 @@ describe('Content Extraction', () => {
     test('DOMPurify is available', async () => {
       const page = await browser.newPage();
       await page.goto('https://example.com', { waitUntil: 'networkidle0' });
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const libs = await checkLibrariesLoaded(page);
       expect(libs.dompurify).toBe(true);
