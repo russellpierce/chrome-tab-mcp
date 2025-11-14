@@ -8,6 +8,7 @@ const {
   delay,
   launchBrowserWithExtension,
   createTestPage,
+  extractContent,
   checkLibrariesLoaded
 } = require('./test-utils');
 
@@ -32,20 +33,8 @@ describe('Content Extraction', () => {
       const page = await browser.newPage();
       await page.goto('https://example.com', { waitUntil: 'networkidle0' });
 
-      // Wait for content script to load
-      await delay(2000);
-
       // Trigger extraction via content script
-      const result = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'extractContent',
-            strategy: 'three-phase'
-          }, (response) => {
-            resolve(response);
-          });
-        });
-      });
+      const result = await extractContent(page, { strategy: 'three-phase' });
 
       expect(result).toBeDefined();
       expect(result.status).toBe('success');
@@ -65,18 +54,7 @@ describe('Content Extraction', () => {
         content: '<h1>Main Heading</h1><p>Test content here.</p>'
       });
 
-      await delay(2000);
-
-      const result = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'extractContent',
-            strategy: 'three-phase'
-          }, (response) => {
-            resolve(response);
-          });
-        });
-      });
+      const result = await extractContent(page, { strategy: 'three-phase' });
 
       expect(result.status).toBe('success');
       expect(result.title).toBe('Test Page Title');
@@ -92,18 +70,7 @@ describe('Content Extraction', () => {
         content: ''
       });
 
-      await delay(2000);
-
-      const result = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'extractContent',
-            strategy: 'three-phase'
-          }, (response) => {
-            resolve(response);
-          });
-        });
-      });
+      const result = await extractContent(page, { strategy: 'three-phase' });
 
       expect(result.status).toBe('success');
       expect(result.content).toBeDefined();
@@ -123,16 +90,7 @@ describe('Content Extraction', () => {
 
       await delay(2000);
 
-      const result = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'extractContent',
-            strategy: 'simple'
-          }, (response) => {
-            resolve(response);
-          });
-        });
-      });
+      const result = await extractContent(page, { strategy: 'simple' });
 
       expect(result.status).toBe('success');
       expect(result.content).toContain('Simple content extraction test');
@@ -148,16 +106,7 @@ describe('Content Extraction', () => {
 
       const startTime = Date.now();
 
-      const result = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'extractContent',
-            strategy: 'three-phase'
-          }, (response) => {
-            resolve(response);
-          });
-        });
-      });
+      const result = await extractContent(page, { strategy: 'three-phase' });
 
       const totalTime = Date.now() - startTime;
 
@@ -185,17 +134,10 @@ describe('Content Extraction', () => {
 
       await delay(2000);
 
-      const result = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'extractContent',
-            strategy: 'simple',
-            startKeyword: 'Skills',
-            endKeyword: 'Contact'
-          }, (response) => {
-            resolve(response);
-          });
-        });
+      const result = await extractContent(page, {
+        strategy: 'simple',
+        startKeyword: 'Skills',
+        endKeyword: 'Contact'
       });
 
       expect(result.status).toBe('success');
@@ -220,17 +162,10 @@ describe('Content Extraction', () => {
 
       await delay(2000);
 
-      const result = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'extractContent',
-            strategy: 'simple',
-            startKeyword: 'introduction',
-            endKeyword: 'CONCLUSION'
-          }, (response) => {
-            resolve(response);
-          });
-        });
+      const result = await extractContent(page, {
+        strategy: 'simple',
+        startKeyword: 'introduction',
+        endKeyword: 'CONCLUSION'
       });
 
       expect(result.status).toBe('success');
@@ -265,18 +200,7 @@ describe('Content Extraction', () => {
         `
       });
 
-      await delay(2000);
-
-      const result = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'extractContent',
-            strategy: 'three-phase'
-          }, (response) => {
-            resolve(response);
-          });
-        });
-      });
+      const result = await extractContent(page, { strategy: 'three-phase' });
 
       expect(result.status).toBe('success');
       expect(result.content).toContain('Main Article Title');
@@ -303,18 +227,7 @@ describe('Content Extraction', () => {
         ]
       });
 
-      await delay(2000);
-
-      const result = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'extractContent',
-            strategy: 'three-phase'
-          }, (response) => {
-            resolve(response);
-          });
-        });
-      });
+      const result = await extractContent(page, { strategy: 'three-phase' });
 
       expect(result.status).toBe('success');
       expect(result.content).toContain('Normal content');
@@ -345,18 +258,7 @@ describe('Content Extraction', () => {
         `
       });
 
-      await delay(2000);
-
-      const result = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          chrome.runtime.sendMessage({
-            action: 'extractContent',
-            strategy: 'three-phase'
-          }, (response) => {
-            resolve(response);
-          });
-        });
-      });
+      const result = await extractContent(page, { strategy: 'three-phase' });
 
       expect(result.status).toBe('success');
       expect(result.content.length).toBeGreaterThan(0);
