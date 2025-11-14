@@ -5,6 +5,7 @@
  */
 
 const {
+  delay,
   launchBrowserWithExtension,
   openPopup
 } = require('./test-utils');
@@ -49,7 +50,7 @@ describe('Extension UI', () => {
       const popup = await openPopup(browser, extensionId);
 
       // Wait for popup to fully load
-      await popup.waitForTimeout(1000);
+      await delay(1000);
 
       // Check for key UI elements
       const elements = await popup.evaluate(() => {
@@ -79,7 +80,7 @@ describe('Extension UI', () => {
 
     test('extract button is enabled', async () => {
       const popup = await openPopup(browser, extensionId);
-      await popup.waitForTimeout(1000);
+      await delay(1000);
 
       const isEnabled = await popup.evaluate(() => {
         const btn = document.getElementById('extractBtn');
@@ -93,7 +94,7 @@ describe('Extension UI', () => {
 
     test('clear button is present', async () => {
       const popup = await openPopup(browser, extensionId);
-      await popup.waitForTimeout(1000);
+      await delay(1000);
 
       const hasButton = await popup.evaluate(() => {
         const btn = document.getElementById('clearBtn');
@@ -111,11 +112,11 @@ describe('Extension UI', () => {
       // First open a test page
       const page = await browser.newPage();
       await page.goto('https://example.com', { waitUntil: 'networkidle0' });
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       // Open popup
       const popup = await openPopup(browser, extensionId);
-      await popup.waitForTimeout(1000);
+      await delay(1000);
 
       // Click extract button
       await popup.evaluate(() => {
@@ -123,7 +124,7 @@ describe('Extension UI', () => {
       });
 
       // Wait for extraction to complete
-      await popup.waitForTimeout(5000);
+      await delay(5000);
 
       // Check if status was updated
       const statusText = await popup.evaluate(() => {
@@ -139,7 +140,7 @@ describe('Extension UI', () => {
 
     test('clear button clears content area', async () => {
       const popup = await openPopup(browser, extensionId);
-      await popup.waitForTimeout(1000);
+      await delay(1000);
 
       // Add some content to the content area
       await popup.evaluate(() => {
@@ -151,7 +152,7 @@ describe('Extension UI', () => {
         document.getElementById('clearBtn').click();
       });
 
-      await popup.waitForTimeout(500);
+      await delay(500);
 
       // Check if content was cleared
       const content = await popup.evaluate(() => {
@@ -168,11 +169,11 @@ describe('Extension UI', () => {
       // Open a page with a known title
       const page = await browser.newPage();
       await page.goto('https://example.com', { waitUntil: 'networkidle0' });
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       // Open popup
       const popup = await openPopup(browser, extensionId);
-      await popup.waitForTimeout(2000);
+      await delay(2000);
 
       // Get tab title text
       const tabTitle = await popup.evaluate(() => {
@@ -261,7 +262,7 @@ describe('Extension UI', () => {
   describe('Service Worker Communication', () => {
     test('popup can communicate with service worker', async () => {
       const popup = await openPopup(browser, extensionId);
-      await popup.waitForTimeout(1000);
+      await delay(1000);
 
       // Send health check message
       const response = await popup.evaluate(() => {
@@ -284,10 +285,10 @@ describe('Extension UI', () => {
       // Open a test page first
       const page = await browser.newPage();
       await page.goto('https://example.com', { waitUntil: 'networkidle0' });
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       const popup = await openPopup(browser, extensionId);
-      await popup.waitForTimeout(1000);
+      await delay(1000);
 
       const tabInfo = await popup.evaluate(() => {
         return new Promise((resolve) => {
@@ -311,7 +312,7 @@ describe('Extension UI', () => {
   describe('Error Display', () => {
     test('popup handles errors gracefully', async () => {
       const popup = await openPopup(browser, extensionId);
-      await popup.waitForTimeout(1000);
+      await delay(1000);
 
       // Simulate an error by trying to extract from invalid state
       // (This test ensures UI doesn't crash on errors)

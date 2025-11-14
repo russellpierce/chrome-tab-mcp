@@ -5,6 +5,7 @@
  */
 
 const {
+  delay,
   verifyExtensionFiles,
   launchBrowserWithExtension,
   waitForExtension
@@ -125,7 +126,7 @@ describe('Extension Installation', () => {
       await page.reload({ waitUntil: 'networkidle0' });
 
       // Wait a bit for content script to log
-      await page.waitForTimeout(1000);
+      await delay(1000);
 
       // Check if content script logged anything
       const hasContentScriptLog = logs.some(log =>
@@ -145,7 +146,7 @@ describe('Extension Installation', () => {
       await page.goto('https://example.com', { waitUntil: 'networkidle0' });
 
       // Wait for content scripts to load
-      await page.waitForTimeout(2000);
+      await delay(2000);
 
       // Check if Readability and DOMPurify are available
       const librariesLoaded = await page.evaluate(() => {

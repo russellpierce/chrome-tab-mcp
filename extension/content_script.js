@@ -238,4 +238,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 });
 
+/**
+ * Expose extraction API to window for testing
+ * This allows Puppeteer tests to call the extension directly
+ */
+window.__chromeTabReader__ = {
+    extractContent: async (options = {}) => {
+        try {
+            const result = await extractPageContent(options.strategy || "three-phase");
+
+            // Apply keyword filtering if provided
+            if (options.startKeyword || options.endKeyword) {
+                result.content = extractContentBetweenKeywords(
+                    result.content,
+                    options.startKeyword,
+                    options.endKeyword
+                );
+            }
+
+            return result;
+        } catch (error) {
+            return {
+                status: "error",
+                error: error.message
+            };
+        }
+    },
+    getPageInfo: () => ({
+        title: document.title,
+        url: window.location.href
+    }),
+    checkLibraries: () => ({
+        readability: typeof Readability !== 'undefined',
+        dompurify: typeof DOMPurify !== 'undefined'
+    })
+};
+
+console.log("[Chrome Tab Reader] Test API exposed on window.__chromeTabReader__");
+
 console.log("[Chrome Tab Reader] Content script ready");
