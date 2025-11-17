@@ -65,6 +65,7 @@ def invalid_auth_headers():
 # Authentication Tests
 # ============================================================================
 
+@pytest.mark.unit
 class TestAuthentication:
     """Test Bearer token authentication"""
 
@@ -103,6 +104,7 @@ class TestAuthentication:
 # Health Check Endpoint Tests
 # ============================================================================
 
+@pytest.mark.unit
 class TestHealthEndpoint:
     """Test /api/health endpoint"""
 
@@ -135,6 +137,7 @@ class TestHealthEndpoint:
 # Current Tab Endpoint Tests
 # ============================================================================
 
+@pytest.mark.unit
 class TestCurrentTabEndpoint:
     """Test /api/current_tab endpoint"""
 
@@ -180,6 +183,7 @@ class TestCurrentTabEndpoint:
 # Extract Endpoint Tests
 # ============================================================================
 
+@pytest.mark.unit
 class TestExtractEndpoint:
     """Test /api/extract endpoint"""
 
@@ -293,6 +297,7 @@ class TestExtractEndpoint:
 # Navigate and Extract Endpoint Tests
 # ============================================================================
 
+@pytest.mark.unit
 class TestNavigateAndExtractEndpoint:
     """Test /api/navigate_and_extract endpoint"""
 
@@ -358,6 +363,7 @@ class TestNavigateAndExtractEndpoint:
 # Root Endpoint Tests
 # ============================================================================
 
+@pytest.mark.unit
 class TestRootEndpoint:
     """Test / root endpoint"""
 
@@ -372,6 +378,7 @@ class TestRootEndpoint:
 # Request/Response Schema Validation Tests
 # ============================================================================
 
+@pytest.mark.unit
 class TestSchemaValidation:
     """Test request and response schema validation"""
 
@@ -434,6 +441,7 @@ class TestSchemaValidation:
 # Integration Tests
 # ============================================================================
 
+@pytest.mark.unit
 class TestIntegration:
     """Integration tests for multiple endpoint interactions"""
 
@@ -498,6 +506,7 @@ class TestIntegration:
 # OpenAPI Schema Tests
 # ============================================================================
 
+@pytest.mark.unit
 class TestOpenAPISchema:
     """Test OpenAPI schema generation"""
 
@@ -531,6 +540,7 @@ class TestOpenAPISchema:
 # Error Handling Tests
 # ============================================================================
 
+@pytest.mark.unit
 class TestErrorHandling:
     """Test various error scenarios"""
 

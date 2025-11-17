@@ -23,9 +23,11 @@ import subprocess
 import time
 import threading
 from pathlib import Path
+from unittest.mock import Mock, patch
 import tempfile
 import sys
 import os
+import io
 
 # Add parent directory to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -33,37 +35,33 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from chrome_tab_native_host import read_message, send_message, TCP_HOST, TCP_PORT
 
 
+@pytest.mark.unit
 class TestNativeMessagingProtocol:
     """Test the Chrome Native Messaging protocol implementation"""
 
-    def test_message_encoding(self, capsys):
+    def test_message_encoding(self):
         """Test that messages are encoded correctly"""
         message = {"action": "test", "data": "hello"}
 
-        # Redirect stdout to capture binary output
-        import io
-        old_stdout = sys.stdout.buffer
-        sys.stdout.buffer = io.BytesIO()
+        # Mock stdout.buffer.write to capture output
+        mock_buffer = io.BytesIO()
 
-        try:
-            send_message(message)
+        with patch('sys.stdout.buffer.write', mock_buffer.write):
+            with patch('sys.stdout.buffer.flush'):
+                send_message(message)
 
-            # Get the output
-            sys.stdout.buffer.seek(0)
-            output = sys.stdout.buffer.read()
+        # Get the output
+        output = mock_buffer.getvalue()
 
-            # Check length prefix (4 bytes, little-endian)
-            length = struct.unpack('=I', output[:4])[0]
+        # Check length prefix (4 bytes, little-endian)
+        length = struct.unpack('=I', output[:4])[0]
 
-            # Check message content
-            message_bytes = output[4:]
-            assert len(message_bytes) == length
+        # Check message content
+        message_bytes = output[4:]
+        assert len(message_bytes) == length
 
-            decoded = json.loads(message_bytes.decode('utf-8'))
-            assert decoded == message
-
-        finally:
-            sys.stdout.buffer = old_stdout
+        decoded = json.loads(message_bytes.decode('utf-8'))
+        assert decoded == message
 
     def test_message_decoding(self):
         """Test that messages are decoded correctly"""
@@ -72,32 +70,25 @@ class TestNativeMessagingProtocol:
         length = len(encoded)
 
         # Create properly formatted input
-        import io
         input_data = struct.pack('=I', length) + encoded
+        mock_buffer = io.BytesIO(input_data)
 
-        # Redirect stdin
-        old_stdin = sys.stdin.buffer
-        sys.stdin.buffer = io.BytesIO(input_data)
-
-        try:
+        # Mock stdin.buffer.read to return our test data
+        with patch('sys.stdin.buffer.read', mock_buffer.read):
             decoded = read_message()
             assert decoded == message
-        finally:
-            sys.stdin.buffer = old_stdin
 
     def test_empty_message_handling(self):
         """Test handling of connection close (empty input)"""
-        import io
-        old_stdin = sys.stdin.buffer
-        sys.stdin.buffer = io.BytesIO(b'')
+        mock_buffer = io.BytesIO(b'')
 
-        try:
+        # Mock stdin.buffer.read to return empty data
+        with patch('sys.stdin.buffer.read', mock_buffer.read):
             result = read_message()
             assert result is None  # Should return None on connection close
-        finally:
-            sys.stdin.buffer = old_stdin
 
 
+@pytest.mark.unit
 class TestSocketCommunication:
     """Test TCP socket communication between MCP server and native host"""
 
@@ -185,6 +176,7 @@ class TestSocketCommunication:
             client_sock.connect(("127.0.0.1", tcp_port))
 
 
+@pytest.mark.unit
 class TestMCPServerExtraction:
     """Test MCP server's extraction via native messaging"""
 

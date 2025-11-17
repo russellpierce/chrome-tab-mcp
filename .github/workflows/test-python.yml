@@ -1,0 +1,54 @@
+name: Python Tests
+
+on:
+  push:
+    branches: [ main, master, develop, claude/* ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --extra test
+
+      - name: Run FastAPI schema validation
+        run: uv run python test_fastapi_server.py
+
+      - name: Run HTTP server tests
+        run: uv run pytest tests/test_http_server.py -v
+
+      - name: Run native messaging unit tests
+        run: uv run pytest tests/test_native_messaging.py -v -m "not integration and not e2e"
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "## Python Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Unit tests completed (no Chrome required)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tests run:**" >> $GITHUB_STEP_SUMMARY
+          echo "- FastAPI schema validation" >> $GITHUB_STEP_SUMMARY
+          echo "- HTTP server tests (31 tests)" >> $GITHUB_STEP_SUMMARY
+          echo "- Native messaging protocol tests (unit tests only)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Skipped tests (require local Chrome):**" >> $GITHUB_STEP_SUMMARY
+          echo "- Integration tests (Chrome + native host)" >> $GITHUB_STEP_SUMMARY
+          echo "- E2E tests (Playwright + Chrome + extension)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To run all tests locally: \`./run_tests.sh all\`" >> $GITHUB_STEP_SUMMARY
