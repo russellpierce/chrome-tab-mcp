@@ -52,8 +52,10 @@ addopts = [
     "--strict-markers",
 ]
 markers = [
-    "integration: marks tests as integration tests (require native host running)",
-    "e2e: marks tests as end-to-end tests (require Chrome with extension)",
+    "unit: Unit tests with mocks - no Chrome needed (runs in CI, local, Claude Code)",
+    "integration: Integration tests requiring Chrome + native host (local only)",
+    "e2e: End-to-end tests requiring Playwright + Chrome + extension (local only)",
+    "manual: Manual/interactive tests requiring human interaction (local only)",
 ]
 
 [tool.coverage.run]

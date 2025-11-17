@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from chrome_tab_native_host import read_message, send_message, TCP_HOST, TCP_PORT
 
 
+@pytest.mark.unit
 class TestNativeMessagingProtocol:
     """Test the Chrome Native Messaging protocol implementation"""
 
@@ -98,6 +99,7 @@ class TestNativeMessagingProtocol:
             sys.stdin.buffer = old_stdin
 
 
+@pytest.mark.unit
 class TestSocketCommunication:
     """Test TCP socket communication between MCP server and native host"""
 
@@ -185,6 +187,7 @@ class TestSocketCommunication:
             client_sock.connect(("127.0.0.1", tcp_port))
 
 
+@pytest.mark.unit
 class TestMCPServerExtraction:
     """Test MCP server's extraction via native messaging"""
 

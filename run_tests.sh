@@ -46,6 +46,20 @@ if [[ "$TEST_TYPE" != "clean" && "$TEST_TYPE" != "help" && "$TEST_TYPE" != "--he
 fi
 
 case "$TEST_TYPE" in
+    ci)
+        echo -e "${GREEN}Running CI-safe tests (no Chrome required)...${NC}"
+        echo -e "${YELLOW}These tests can run in GitHub Actions, Claude Code, or locally${NC}"
+        echo ""
+        echo -e "${BLUE}→ FastAPI Schema Validation${NC}"
+        uv run python test_fastapi_server.py
+        echo ""
+        echo -e "${BLUE}→ Unit Tests (HTTP Server)${NC}"
+        uv run pytest tests/test_http_server.py -v
+        echo ""
+        echo -e "${BLUE}→ Unit Tests (Native Messaging)${NC}"
+        uv run pytest tests/test_native_messaging.py -v -m "not integration and not e2e"
+        ;;
+
     unit)
         echo -e "${GREEN}Running unit tests...${NC}"
         echo ""
@@ -136,6 +150,7 @@ case "$TEST_TYPE" in
         echo "Usage: $0 [test_type]"
         echo ""
         echo "Test types:"
+        echo "  ci           - Run CI-safe tests (no Chrome needed - for GitHub Actions)"
         echo "  unit         - Run unit tests (FastAPI schema, HTTP server, native messaging)"
         echo "  integration  - Run integration tests (requires native host)"
         echo "  e2e          - Run end-to-end tests (requires Chrome + extension)"
@@ -145,8 +160,13 @@ case "$TEST_TYPE" in
         echo "  clean        - Clean test artifacts"
         echo "  help         - Show this help"
         echo ""
+        echo "Test Environment Compatibility:"
+        echo "  ✓ CI-safe:      ci, unit (no Chrome required)"
+        echo "  ✗ Local only:   integration, e2e, manual (Chrome required)"
+        echo ""
         echo "Examples:"
         echo "  $0              # Run all tests"
+        echo "  $0 ci           # CI-safe tests (for GitHub Actions)"
         echo "  $0 unit         # Quick unit tests (no Chrome needed)"
         echo "  $0 manual       # Test actual Chrome connection"
         echo "  $0 e2e          # Full end-to-end test"
