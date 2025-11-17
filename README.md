@@ -28,8 +28,10 @@ This repository contains three ways to access Chrome tab content:
 - Generates secure access tokens for API authentication
 - Works on Windows, macOS, Linux
 
-### 2. HTTP Server
-- REST API for programmatic access
+### 2. HTTP Server (FastAPI)
+- REST API for programmatic access built with FastAPI
+- **Automatic OpenAPI 3.0 specification** generation from code
+- **Interactive API documentation** at `/docs` (Swagger UI) and `/redoc`
 - Endpoints for content extraction and tab navigation
 - **Token-based authentication** for security
 - Can be called from scripts, MCP server, or other tools
@@ -67,22 +69,32 @@ This repository contains three ways to access Chrome tab content:
 
 If you want to use the HTTP API:
 
-1. **Get your access token:**
+1. **Install Python dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Get your access token:**
    - Click the extension icon
    - Copy the access token shown at the top
 
-2. **Configure authentication:**
+3. **Configure authentication:**
    ```bash
    ./setup_token.sh
-   # Or manually create ~/.chrome-tab-reader/tokens.json
+   # Or manually create the tokens.json file (see extension/docs for location)
    ```
 
-3. **Start the HTTP server:**
+4. **Start the HTTP server:**
    ```bash
    python chrome_tab_http_server.py
    ```
 
-4. **Test it:**
+5. **Explore the API:**
+   - **Interactive Swagger UI:** http://localhost:8888/docs
+   - **ReDoc Documentation:** http://localhost:8888/redoc
+   - **OpenAPI Spec (JSON):** http://localhost:8888/openapi.json
+
+6. **Test it:**
    ```bash
    curl -H "Authorization: Bearer YOUR_TOKEN" \
         http://localhost:8888/api/health

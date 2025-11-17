@@ -5,12 +5,13 @@
 # If not installed, will fall back to manual implementation
 platformdirs>=4.0.0
 
-# OpenAPI specification generation from code decorators
-# Used to automatically generate API documentation
-apispec>=6.0.0
+# FastAPI for HTTP API with automatic OpenAPI spec generation
+fastapi>=0.104.0
 
-# Note: The HTTP server (chrome_tab_http_server.py) will work without
-# platformdirs, but installing it is recommended for better compliance
-# with system standards.
+# ASGI server for running FastAPI
+uvicorn[standard]>=0.24.0
+
+# Note: The HTTP server (chrome_tab_http_server.py) requires FastAPI and uvicorn.
+# platformdirs is optional but recommended for better compliance with system standards.
 #
 # Install with: pip install -r requirements.txt
