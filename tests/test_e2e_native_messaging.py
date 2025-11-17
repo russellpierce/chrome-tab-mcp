@@ -190,48 +190,46 @@ class TestFullNativeMessagingFlow:
             time.sleep(2)
 
             # Simulate MCP server request
-            socket_path = Path.home() / ".chrome-tab-reader" / "mcp_bridge.sock"
+            bridge_host = "127.0.0.1"
+            bridge_port = 8765
 
-            if socket_path.exists():
-                try:
-                    # Connect to socket
-                    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    sock.settimeout(10)
-                    sock.connect(str(socket_path))
+            try:
+                # Connect to TCP bridge
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(10)
+                sock.connect((bridge_host, bridge_port))
 
-                    # Send extraction request
-                    request = {
-                        "action": "extract_current_tab",
-                        "strategy": "three-phase"
-                    }
-                    sock.sendall((json.dumps(request) + '\n').encode('utf-8'))
+                # Send extraction request
+                request = {
+                    "action": "extract_current_tab",
+                    "strategy": "three-phase"
+                }
+                sock.sendall((json.dumps(request) + '\n').encode('utf-8'))
 
-                    # Receive response
-                    response_data = b''
-                    while True:
-                        chunk = sock.recv(4096)
-                        if not chunk:
-                            break
-                        response_data += chunk
-                        if b'\n' in response_data:
-                            break
+                # Receive response
+                response_data = b''
+                while True:
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        break
+                    response_data += chunk
+                    if b'\n' in response_data:
+                        break
 
-                    sock.close()
+                sock.close()
 
-                    # Verify response
-                    if response_data:
-                        response = json.loads(response_data.decode('utf-8').strip())
-                        assert response.get("status") == "success"
-                        assert "content" in response
-                        assert len(response["content"]) > 0
-                        print(f"✓ Extracted {len(response['content'])} characters")
-                    else:
-                        pytest.skip("No response from native host")
+                # Verify response
+                if response_data:
+                    response = json.loads(response_data.decode('utf-8').strip())
+                    assert response.get("status") == "success"
+                    assert "content" in response
+                    assert len(response["content"]) > 0
+                    print(f"✓ Extracted {len(response['content'])} characters")
+                else:
+                    pytest.skip("No response from native host")
 
-                except Exception as e:
-                    pytest.skip(f"Could not connect to native host: {e}")
-            else:
-                pytest.skip("Native messaging socket not found. Ensure extension is loaded and native host is installed.")
+            except Exception as e:
+                pytest.skip(f"Could not connect to native host at {bridge_host}:{bridge_port}: {e}")
 
             browser.close()
 

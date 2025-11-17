@@ -8,7 +8,7 @@ This guide explains how to set up Native Messaging to connect the MCP server dir
 Claude Code (via MCP protocol)
     ↓
 MCP Server (chrome_tab_mcp_server.py)
-    ↓ (Unix socket)
+    ↓ (TCP localhost:8765)
 Native Messaging Host (chrome_tab_native_host.py)
     ↓ (Chrome Native Messaging protocol - stdin/stdout)
 Chrome Extension
@@ -93,19 +93,19 @@ process_chrome_tab()
 ### Linux
 
 - Manifest directory: `~/.config/google-chrome/NativeMessagingHosts/`
-- Socket path: `~/.chrome-tab-reader/mcp_bridge.sock`
+- TCP: `127.0.0.1:8765`
 - Log file: `~/.chrome-tab-reader/native_host.log`
 
 ### macOS
 
 - Manifest directory: `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/`
-- Socket path: `~/.chrome-tab-reader/mcp_bridge.sock`
+- TCP: `127.0.0.1:8765`
 - Log file: `~/.chrome-tab-reader/native_host.log`
 
 ### Windows
 
 - Manifest directory: `%APPDATA%\Google\Chrome\NativeMessagingHosts\`
-- Socket path: `%USERPROFILE%\.chrome-tab-reader\mcp_bridge.sock` (named pipe)
+- TCP: `127.0.0.1:8765`
 - Log file: `%USERPROFILE%\.chrome-tab-reader\native_host.log`
 
 ## Troubleshooting
@@ -140,15 +140,21 @@ process_chrome_tab()
 
 ### MCP Server Can't Connect to Native Host
 
-**Symptom:** `Native messaging bridge not found` error
+**Symptom:** `Native messaging bridge is not running` error
 
 **Solutions:**
 1. Ensure Chrome is running with the extension loaded
 2. The native host only starts when the extension connects
 3. Open the extension popup to trigger the connection
-4. Check that the socket exists:
+4. Check that the TCP server is listening:
    ```bash
-   ls -la ~/.chrome-tab-reader/mcp_bridge.sock
+   # Linux/Mac
+   netstat -an | grep 8765
+   # Or
+   lsof -i :8765
+
+   # Windows
+   netstat -an | findstr 8765
    ```
 
 ### Permission Denied Errors
@@ -199,19 +205,19 @@ Chrome Native Messaging uses a simple binary protocol over stdin/stdout:
 The native host acts as a bridge:
 
 1. **Extension → Native Host:** Chrome Native Messaging (stdin/stdout)
-2. **Native Host → MCP Server:** Unix socket (JSON over newline-delimited protocol)
+2. **Native Host → MCP Server:** TCP localhost:8765 (JSON over newline-delimited protocol)
 3. **MCP Server:** Sends requests to native host, receives responses
 
 ### Message Flow Example
 
 ```
-1. MCP server connects to Unix socket
+1. MCP server connects to TCP localhost:8765
 2. MCP server sends: {"action": "extract_current_tab", "strategy": "three-phase"}
 3. Native host forwards to extension via stdout
 4. Extension extracts content using three-phase strategy
 5. Extension sends response via stdin
 6. Native host receives response
-7. Native host forwards to MCP server via Unix socket
+7. Native host forwards to MCP server via TCP
 8. MCP server processes content with Ollama
 ```
 
@@ -228,19 +234,23 @@ The native host acts as a bridge:
 
 ## Advanced Configuration
 
-### Custom Socket Path
+### Custom TCP Port
 
-You can change the socket path by editing both files:
+You can change the TCP port by editing both files:
 
 1. **Native host** (`chrome_tab_native_host.py`):
    ```python
-   SOCKET_PATH = Path.home() / ".custom-path" / "mcp_bridge.sock"
+   TCP_HOST = "127.0.0.1"
+   TCP_PORT = 9000  # Your custom port
    ```
 
 2. **MCP server** (`chrome_tab_mcp_server.py`):
    ```python
-   SOCKET_PATH = Path.home() / ".custom-path" / "mcp_bridge.sock"
+   BRIDGE_HOST = "127.0.0.1"
+   BRIDGE_PORT = 9000  # Your custom port
    ```
+
+**Note:** Make sure the port is not already in use and is allowed through your firewall.
 
 ### Multiple Extension Instances
 
@@ -260,7 +270,7 @@ To remove the native messaging host:
 # Remove manifest
 rm ~/.config/google-chrome/NativeMessagingHosts/com.chrome_tab_reader.host.json
 
-# Remove logs and socket (optional)
+# Remove logs (optional)
 rm -rf ~/.chrome-tab-reader/
 ```
 

@@ -35,8 +35,9 @@ DEFAULT_SYSTEM_PROMPT = (
     "Your total response must be smaller than the contents of the page you were provided."
 )
 
-# Native messaging bridge socket path
-SOCKET_PATH = Path.home() / ".chrome-tab-reader" / "mcp_bridge.sock"
+# Native messaging bridge TCP configuration
+BRIDGE_HOST = "127.0.0.1"
+BRIDGE_PORT = 8765
 
 # Initialize FastMCP server
 mcp = FastMCP(
@@ -62,28 +63,21 @@ def extract_tab_content_via_extension() -> dict:
         dict: Response from extension with 'status', 'content', 'title', 'url', etc.
     """
     try:
-        # Check if socket exists
-        if not SOCKET_PATH.exists():
-            return {
-                "status": "error",
-                "error": f"Native messaging bridge not found. Please ensure:\n1. Chrome extension is installed\n2. Native messaging host is installed\n3. Native host is running (it starts automatically when Chrome connects)"
-            }
-
-        # Connect to Unix socket
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        # Connect to TCP bridge
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(60)  # 60 second timeout
 
         try:
-            sock.connect(str(SOCKET_PATH))
+            sock.connect((BRIDGE_HOST, BRIDGE_PORT))
         except ConnectionRefusedError:
             return {
                 "status": "error",
-                "error": "Native messaging bridge is not responding. Please ensure Chrome is running with the extension installed."
+                "error": f"Native messaging bridge is not running on {BRIDGE_HOST}:{BRIDGE_PORT}. Please ensure:\n1. Chrome extension is installed\n2. Native messaging host is installed\n3. Chrome is running with the extension loaded"
             }
         except Exception as e:
             return {
                 "status": "error",
-                "error": f"Failed to connect to native messaging bridge: {str(e)}"
+                "error": f"Failed to connect to native messaging bridge at {BRIDGE_HOST}:{BRIDGE_PORT}: {str(e)}"
             }
 
         # Send extraction request

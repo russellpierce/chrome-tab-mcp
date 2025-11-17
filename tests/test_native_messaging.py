@@ -30,7 +30,7 @@ import os
 # Add parent directory to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from chrome_tab_native_host import read_message, send_message, SOCKET_PATH
+from chrome_tab_native_host import read_message, send_message, TCP_HOST, TCP_PORT
 
 
 class TestNativeMessagingProtocol:
@@ -99,28 +99,26 @@ class TestNativeMessagingProtocol:
 
 
 class TestSocketCommunication:
-    """Test Unix socket communication between MCP server and native host"""
+    """Test TCP socket communication between MCP server and native host"""
 
     @pytest.fixture
-    def socket_path(self):
-        """Create a temporary socket path"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir) / "test.sock"
+    def tcp_port(self):
+        """Provide a test TCP port"""
+        return 19998  # Use a high port for testing
 
     @pytest.fixture
-    def mock_socket_server(self, socket_path):
-        """Create a mock socket server"""
-        server_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server_socket.bind(str(socket_path))
+    def mock_socket_server(self, tcp_port):
+        """Create a mock TCP socket server"""
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind(("127.0.0.1", tcp_port))
         server_socket.listen(1)
 
         yield server_socket
 
         server_socket.close()
-        if socket_path.exists():
-            socket_path.unlink()
 
-    def test_socket_request_response(self, socket_path, mock_socket_server):
+    def test_socket_request_response(self, tcp_port, mock_socket_server):
         """Test sending request and receiving response via socket"""
 
         def server_handler():
@@ -148,8 +146,8 @@ class TestSocketCommunication:
         time.sleep(0.1)
 
         # Client: Connect and send request
-        client_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        client_sock.connect(str(socket_path))
+        client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_sock.connect(("127.0.0.1", tcp_port))
 
         request = {
             "action": "extract_current_tab",
@@ -176,16 +174,15 @@ class TestSocketCommunication:
         assert response["content"] == "test content"
         assert response["request_id"] == 1
 
-    def test_socket_timeout_handling(self, socket_path):
-        """Test timeout when socket server is not responding"""
-        # Create socket file but don't bind server
-        socket_path.touch()
+    def test_socket_timeout_handling(self, tcp_port):
+        """Test timeout when TCP server is not responding"""
+        # Try to connect to a port with no server
 
-        client_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_sock.settimeout(1)
 
-        with pytest.raises((ConnectionRefusedError, FileNotFoundError)):
-            client_sock.connect(str(socket_path))
+        with pytest.raises(ConnectionRefusedError):
+            client_sock.connect(("127.0.0.1", tcp_port))
 
 
 class TestMCPServerExtraction:
@@ -193,34 +190,29 @@ class TestMCPServerExtraction:
 
     @pytest.fixture
     def mock_bridge_socket(self):
-        """Create a mock bridge socket that simulates the native host"""
-        socket_path = Path.home() / ".chrome-tab-reader" / "test_mcp_bridge.sock"
-        socket_path.parent.mkdir(exist_ok=True)
+        """Create a mock TCP bridge that simulates the native host"""
+        test_port = 19997  # Use a high port for testing
 
-        if socket_path.exists():
-            socket_path.unlink()
-
-        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        server.bind(str(socket_path))
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind(("127.0.0.1", test_port))
         server.listen(1)
 
-        yield server, socket_path
+        yield server, test_port
 
         server.close()
-        if socket_path.exists():
-            socket_path.unlink()
 
     def test_extract_tab_content_success(self, mock_bridge_socket):
         """Test successful content extraction"""
-        server, socket_path = mock_bridge_socket
+        server, test_port = mock_bridge_socket
 
         # Import here to avoid issues if module not available
-        from chrome_tab_mcp_server import extract_tab_content_via_extension, SOCKET_PATH
+        from chrome_tab_mcp_server import extract_tab_content_via_extension, BRIDGE_HOST, BRIDGE_PORT
 
-        # Temporarily override socket path
-        original_socket_path = SOCKET_PATH
+        # Temporarily override TCP settings
+        original_port = BRIDGE_PORT
         import chrome_tab_mcp_server
-        chrome_tab_mcp_server.SOCKET_PATH = socket_path
+        chrome_tab_mcp_server.BRIDGE_PORT = test_port
 
         def mock_extension_response():
             client, _ = server.accept()
@@ -257,21 +249,25 @@ class TestMCPServerExtraction:
             assert result["title"] == "Test Page"
             assert result["url"] == "https://example.com"
         finally:
-            # Restore original socket path
-            chrome_tab_mcp_server.SOCKET_PATH = original_socket_path
+            # Restore original port
+            chrome_tab_mcp_server.BRIDGE_PORT = original_port
 
-    def test_extract_tab_content_no_socket(self):
-        """Test error when socket doesn't exist"""
-        from chrome_tab_mcp_server import extract_tab_content_via_extension, SOCKET_PATH
+    def test_extract_tab_content_no_connection(self):
+        """Test error when TCP server is not running"""
+        from chrome_tab_mcp_server import extract_tab_content_via_extension
 
-        # Ensure socket doesn't exist
-        if SOCKET_PATH.exists():
-            SOCKET_PATH.unlink()
+        # Use a port that won't have a server
+        import chrome_tab_mcp_server
+        original_port = chrome_tab_mcp_server.BRIDGE_PORT
+        chrome_tab_mcp_server.BRIDGE_PORT = 19996  # Unused port
 
-        result = extract_tab_content_via_extension()
+        try:
+            result = extract_tab_content_via_extension()
 
-        assert result["status"] == "error"
-        assert "not found" in result["error"].lower()
+            assert result["status"] == "error"
+            assert "not running" in result["error"].lower() or "refused" in result["error"].lower()
+        finally:
+            chrome_tab_mcp_server.BRIDGE_PORT = original_port
 
 
 # Pytest configuration

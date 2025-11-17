@@ -7,12 +7,12 @@ It implements Chrome's Native Messaging protocol for bidirectional communication
 
 Architecture:
 - Extension connects to this host via Chrome Native Messaging (stdin/stdout)
-- MCP server connects to this host via Unix socket
+- MCP server connects to this host via TCP (localhost)
 - Host forwards requests between MCP server and extension
 
 Protocol:
 - Native Messaging: 4-byte length prefix (little-endian) + JSON message
-- Unix Socket: JSON messages terminated by newline
+- TCP: JSON messages terminated by newline
 
 Reference: https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging
 """
@@ -28,7 +28,8 @@ import time
 from pathlib import Path
 
 # Configuration
-SOCKET_PATH = Path.home() / ".chrome-tab-reader" / "mcp_bridge.sock"
+TCP_HOST = "127.0.0.1"
+TCP_PORT = 8765  # Port for MCP server to connect to
 LOG_DIR = Path.home() / ".chrome-tab-reader"
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / "native_host.log"
@@ -199,25 +200,27 @@ def handle_mcp_client(client_socket):
 
 def socket_server_thread():
     """
-    Run a Unix socket server to accept connections from MCP server.
+    Run a TCP server to accept connections from MCP server.
     """
     global extension_connected
 
-    # Remove socket file if it exists
-    if SOCKET_PATH.exists():
-        SOCKET_PATH.unlink()
+    # Create TCP socket
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-    # Create Unix socket
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server.bind(str(SOCKET_PATH))
-    server.listen(5)
-
-    logger.info(f"Unix socket server listening on {SOCKET_PATH}")
+    try:
+        server.bind((TCP_HOST, TCP_PORT))
+        server.listen(5)
+        logger.info(f"TCP server listening on {TCP_HOST}:{TCP_PORT}")
+    except OSError as e:
+        logger.error(f"Failed to bind to {TCP_HOST}:{TCP_PORT}: {e}")
+        logger.error("Is another instance already running?")
+        return
 
     try:
         while True:
-            client_socket, _ = server.accept()
-            logger.info("MCP client connected")
+            client_socket, client_addr = server.accept()
+            logger.info(f"MCP client connected from {client_addr}")
 
             # Handle client in a new thread
             client_thread = threading.Thread(target=handle_mcp_client, args=(client_socket,))
@@ -225,11 +228,9 @@ def socket_server_thread():
             client_thread.start()
 
     except Exception as e:
-        logger.error(f"Socket server error: {e}", exc_info=True)
+        logger.error(f"TCP server error: {e}", exc_info=True)
     finally:
         server.close()
-        if SOCKET_PATH.exists():
-            SOCKET_PATH.unlink()
 
 
 def extension_message_loop():
@@ -268,21 +269,21 @@ def extension_message_loop():
 
 def main():
     """
-    Main entry point: Start socket server and extension message loop.
+    Main entry point: Start TCP server and extension message loop.
     """
     logger.info("=== Native Messaging Host Starting ===")
     logger.info(f"Python version: {sys.version}")
     logger.info(f"PID: {os.getpid()}")
-    logger.info(f"Socket path: {SOCKET_PATH}")
+    logger.info(f"TCP: {TCP_HOST}:{TCP_PORT}")
     logger.info(f"Log file: {LOG_FILE}")
 
     try:
-        # Start Unix socket server in background thread
+        # Start TCP server in background thread
         socket_thread = threading.Thread(target=socket_server_thread)
         socket_thread.daemon = True
         socket_thread.start()
 
-        logger.info("Socket server started, waiting for extension connection...")
+        logger.info("TCP server started, waiting for extension connection...")
 
         # Run extension message loop in main thread
         extension_message_loop()

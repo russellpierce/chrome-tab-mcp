@@ -64,22 +64,26 @@ def test_protocol():
 
 
 def test_socket_communication():
-    """Test Unix socket communication"""
-    print("\n=== Testing Unix Socket Communication ===\n")
+    """Test TCP socket communication"""
+    print("\n=== Testing TCP Socket Communication ===\n")
 
-    socket_path = Path("/tmp") / "test_chrome_tab_mcp.sock"
-
-    # Clean up any existing socket
-    if socket_path.exists():
-        socket_path.unlink()
+    test_host = "127.0.0.1"
+    test_port = 19999  # Use a high port for testing
 
     print("Test 1: Create server socket")
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server.bind(str(socket_path))
-    server.listen(1)
-    server.settimeout(5)
-    print(f"  Server listening on: {socket_path}")
-    print("  ✓ Server created\n")
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        server.bind((test_host, test_port))
+        server.listen(1)
+        server.settimeout(5)
+        print(f"  Server listening on: {test_host}:{test_port}")
+        print("  ✓ Server created\n")
+    except OSError as e:
+        print(f"  ✗ Failed to bind: {e}")
+        print(f"  Port {test_port} may be in use\n")
+        server.close()
+        return False
 
     import threading
 
@@ -118,9 +122,9 @@ def test_socket_communication():
     print("Test 2: Client connection and communication")
     try:
         # Create client
-        client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client.settimeout(5)
-        client.connect(str(socket_path))
+        client.connect((test_host, test_port))
         print("  Client: Connected to server")
 
         # Send request
@@ -160,39 +164,34 @@ def test_socket_communication():
 
     finally:
         server.close()
-        if socket_path.exists():
-            socket_path.unlink()
 
 
 def test_extension_communication():
     """Test MCP → Extension communication"""
     print("\n=== Testing MCP → Extension Communication ===\n")
 
-    socket_path = Path.home() / ".chrome-tab-reader" / "mcp_bridge.sock"
+    bridge_host = "127.0.0.1"
+    bridge_port = 8765
 
-    print("Test 1: Check if native messaging socket exists")
-    if not socket_path.exists():
-        print(f"  ✗ Socket not found: {socket_path}")
+    print("Test 1: Check if native messaging TCP server is running")
+    print(f"  Attempting to connect to {bridge_host}:{bridge_port}...")
+
+    print("\nTest 2: Connect to native messaging bridge")
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(10)
+        sock.connect((bridge_host, bridge_port))
+        print("  ✓ Connected to native host\n")
+
+    except ConnectionRefusedError:
+        print(f"  ✗ Connection refused to {bridge_host}:{bridge_port}")
         print("\n  Setup instructions:")
         print("  1. Load extension in Chrome (chrome://extensions/)")
         print("  2. Run: ./install_native_host.sh <extension-id>")
         print("  3. Open any webpage in Chrome")
         print("  4. Open extension popup to trigger connection")
         print("  5. Check native host log: tail -f ~/.chrome-tab-reader/native_host.log")
-        return False
-
-    print(f"  ✓ Socket exists: {socket_path}\n")
-
-    print("Test 2: Connect to native messaging bridge")
-    try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(10)
-        sock.connect(str(socket_path))
-        print("  ✓ Connected to native host\n")
-
-    except ConnectionRefusedError:
-        print("  ✗ Connection refused")
-        print("  Make sure Chrome is running with the extension loaded")
+        print(f"  6. Verify TCP server is listening: lsof -i :{bridge_port}")
         return False
     except Exception as e:
         print(f"  ✗ Connection failed: {e}")
