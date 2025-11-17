@@ -64,17 +64,48 @@ function initializePopup() {
     }
 
     /**
-     * Copy access token to clipboard
+     * Copy access token to clipboard as complete JSON config
      */
     function copyAccessToken() {
         const token = accessTokenEl.textContent;
-        navigator.clipboard.writeText(token).then(() => {
-            showStatus(statusEl, 'success', 'Token copied to clipboard');
+
+        if (!token || token === 'Loading...' || token === 'Error loading token') {
+            showStatus(statusEl, 'error', 'No valid token available');
+            return;
+        }
+
+        // Detect platform for appropriate file path
+        const platform = navigator.platform.toLowerCase();
+        let configPath = '';
+        if (platform.includes('win')) {
+            configPath = '%APPDATA%\\chrome-tab-reader\\tokens.json';
+        } else if (platform.includes('mac')) {
+            configPath = '~/Library/Application Support/chrome-tab-reader/tokens.json';
+        } else {
+            // Linux: Follow XDG Base Directory Specification
+            configPath = '$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json or ~/.config/chrome-tab-reader/tokens.json';
+        }
+
+        // Create complete JSON config ready to save
+        const config = {
+            tokens: [token],
+            note: "Chrome Tab Reader access token. Get new tokens from the extension popup.",
+            instructions: [
+                "1. Save this file to: " + configPath,
+                "2. You can add multiple tokens to the 'tokens' array",
+                "3. Restart your HTTP server after making changes"
+            ]
+        };
+
+        const configJSON = JSON.stringify(config, null, 2);
+
+        navigator.clipboard.writeText(configJSON).then(() => {
+            showStatus(statusEl, 'success', `Config JSON copied! Save to: ${configPath}`);
             setTimeout(() => {
                 statusEl.className = 'status';
-            }, 2000);
+            }, 5000);
         }).catch(err => {
-            showStatus(statusEl, 'error', 'Failed to copy token');
+            showStatus(statusEl, 'error', 'Failed to copy to clipboard');
         });
     }
 
