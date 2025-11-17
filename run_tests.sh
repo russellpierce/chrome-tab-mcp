@@ -32,6 +32,19 @@ echo ""
 # Determine test type
 TEST_TYPE="${1:-all}"
 
+# Ensure dependencies are installed (skip for clean/help commands)
+if [[ "$TEST_TYPE" != "clean" && "$TEST_TYPE" != "help" && "$TEST_TYPE" != "--help" && "$TEST_TYPE" != "-h" ]]; then
+    echo -e "${YELLOW}Checking dependencies...${NC}"
+    if ! uv sync --extra test --quiet 2>&1 | grep -q "error"; then
+        echo -e "${GREEN}✓ Dependencies synced${NC}"
+        echo ""
+    else
+        echo -e "${RED}✗ Failed to sync dependencies${NC}"
+        echo "Run: uv sync --extra test"
+        exit 1
+    fi
+fi
+
 case "$TEST_TYPE" in
     unit)
         echo -e "${GREEN}Running unit tests...${NC}"
