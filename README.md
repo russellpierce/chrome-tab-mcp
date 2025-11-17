@@ -35,11 +35,14 @@ This repository contains three ways to access Chrome tab content:
 - Can be called from scripts, MCP server, or other tools
 - See: `chrome_tab_http_server.py`
 
-### 3. MCP Server (macOS only)
+### 3. MCP Server (Cross-platform via Native Messaging)
 - Model Context Protocol server for Claude Code
-- Uses AppleScript to extract tab content
+- **NEW:** Uses Chrome Native Messaging for direct extension communication
+- Cross-platform support (Windows, macOS, Linux)
 - Integrates with local Ollama AI models
-- See: `chrome_tab_mcp_server.py` and `README_MCP.md`
+- Superior three-phase extraction via browser extension
+- See: `chrome_tab_mcp_server.py`, `README_MCP.md`, and `NATIVE_MESSAGING_SETUP.md`
+- Legacy AppleScript mode still available (macOS only)
 
 ## Quick Start
 

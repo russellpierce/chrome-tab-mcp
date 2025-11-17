@@ -20,6 +20,8 @@ import os
 import sys
 import argparse
 import json
+import socket
+from pathlib import Path
 
 # Configuration - must be provided via command-line args or environment variables
 # These will be validated and set in main()
@@ -33,9 +35,8 @@ DEFAULT_SYSTEM_PROMPT = (
     "Your total response must be smaller than the contents of the page you were provided."
 )
 
-# Get the directory where this script is located
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-APPLESCRIPT_PATH = os.path.join(SCRIPT_DIR, "chrome_tab.scpt")
+# Native messaging bridge socket path
+SOCKET_PATH = Path.home() / ".chrome-tab-reader" / "mcp_bridge.sock"
 
 # Initialize FastMCP server
 mcp = FastMCP(
@@ -53,39 +54,95 @@ mcp = FastMCP(
 )
 
 
+def extract_tab_content_via_extension() -> dict:
+    """
+    Extract content from current Chrome tab via Native Messaging bridge.
+
+    Returns:
+        dict: Response from extension with 'status', 'content', 'title', 'url', etc.
+    """
+    try:
+        # Check if socket exists
+        if not SOCKET_PATH.exists():
+            return {
+                "status": "error",
+                "error": f"Native messaging bridge not found. Please ensure:\n1. Chrome extension is installed\n2. Native messaging host is installed\n3. Native host is running (it starts automatically when Chrome connects)"
+            }
+
+        # Connect to Unix socket
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(60)  # 60 second timeout
+
+        try:
+            sock.connect(str(SOCKET_PATH))
+        except ConnectionRefusedError:
+            return {
+                "status": "error",
+                "error": "Native messaging bridge is not responding. Please ensure Chrome is running with the extension installed."
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Failed to connect to native messaging bridge: {str(e)}"
+            }
+
+        # Send extraction request
+        request = {
+            "action": "extract_current_tab",
+            "strategy": "three-phase"
+        }
+
+        request_json = json.dumps(request) + '\n'
+        sock.sendall(request_json.encode('utf-8'))
+
+        # Receive response
+        response_data = b''
+        while True:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            response_data += chunk
+            if b'\n' in response_data:
+                break
+
+        sock.close()
+
+        if not response_data:
+            return {
+                "status": "error",
+                "error": "No response from native messaging bridge"
+            }
+
+        # Parse response
+        response = json.loads(response_data.decode('utf-8').strip())
+        return response
+
+    except socket.timeout:
+        return {
+            "status": "error",
+            "error": "Timeout waiting for extension response (60 seconds)"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"Error communicating with extension: {str(e)}"
+        }
+
+
 @mcp.tool()
 def process_chrome_tab(
-    system_prompt: str | None = None,
-    start: str | None = None,
-    end: str | None = None
+    system_prompt: str | None = None
 ) -> str:
     """Process current Chrome tab content with AI analysis.
 
-    Extracts and analyzes content from the active Chrome tab. Supports flexible
-    filtering based on keywords or full page extraction.
-
-    FILTERING BEHAVIOR:
-    - No parameters: Full page analysis with default prompt
-    - system_prompt only: Full page analysis with custom prompt
-    - start + end: Filters content between both keywords
-    - start only: Filters from keyword to end of document
-    - end only: Filters from document start to keyword
-    - system_prompt + start/end: Custom analysis with keyword filtering
+    Extracts and analyzes content from the active Chrome tab using the browser
+    extension's sophisticated three-phase extraction (lazy-loading, DOM stability,
+    Readability.js cleaning).
 
     Args:
         system_prompt: Optional custom prompt for AI analysis. Default prompt
             extracts key information and provides Q&A format responses about
             the page content. Custom prompts enable specialized analysis tasks.
-
-        start: Optional start keyword for filtering. Extracts content starting
-            AFTER this keyword. If provided without 'end', extracts to document
-            end. If omitted while 'end' is provided, starts from document beginning.
-            Case-insensitive matching.
-
-        end: Optional end keyword for filtering. Extracts content up to BEFORE
-            this keyword. If provided without 'start', extracts from document
-            beginning. If omitted while 'start' is provided, extracts to document
-            end. Case-insensitive matching.
 
     Returns:
         str: AI-generated analysis of the tab content. Thinking tags are automatically
@@ -96,51 +153,21 @@ def process_chrome_tab(
         # → Full page analysis with default prompt
 
         process_chrome_tab(system_prompt="Summarize this page in 3 bullets")
-        # → Custom analysis of FULL page
+        # → Custom analysis of page content
 
-        process_chrome_tab(start="Skills", end="Experience")
-        # → Default analysis of content between keywords
-
-        process_chrome_tab(start="Contact Info")
-        # → Default analysis from keyword to end
-
-        process_chrome_tab(system_prompt="List technical skills", start="Skills", end="Projects")
-        # → Custom analysis of filtered section
+        process_chrome_tab(system_prompt="Extract all product names and prices")
+        # → Specialized extraction task
     """
-    # Build osascript command based on parameters
-    cmd = ["osascript", APPLESCRIPT_PATH]
+    # Extract content from Chrome tab via extension
+    extraction_result = extract_tab_content_via_extension()
 
-    # Determine filtering arguments
-    if start is None and end is None:
-        # No filtering specified - get full page
-        cmd.append("--no-filter")
-    else:
-        # Explicit filtering mode - use provided keywords
-        if start is None:
-            # From document start to end keyword
-            cmd.extend(["--from-start", end])
-        elif end is None:
-            # From start keyword to end of document
-            cmd.extend([start, "--to-end"])
-        else:
-            # Between both keywords
-            cmd.extend([start, end])
+    if extraction_result.get("status") != "success":
+        error_msg = extraction_result.get("error", "Unknown error during content extraction")
+        return f"Error extracting tab content: {error_msg}"
 
-    # Execute AppleScript to get tab content
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode != 0:
-            return f"Error getting tab content: {result.stderr}"
-        tab_content = result.stdout.strip()
-
-        if not tab_content:
-            return "Error: No content retrieved from Chrome tab"
-    except subprocess.TimeoutExpired:
-        return "Error: Timeout while getting tab content from Chrome"
-    except FileNotFoundError:
-        return f"Error: AppleScript file not found at {APPLESCRIPT_PATH}"
-    except Exception as e:
-        return f"Error executing AppleScript: {str(e)}"
+    tab_content = extraction_result.get("content", "")
+    if not tab_content:
+        return "Error: No content retrieved from Chrome tab"
 
     # Use custom system prompt or default
     prompt = system_prompt if system_prompt is not None else DEFAULT_SYSTEM_PROMPT

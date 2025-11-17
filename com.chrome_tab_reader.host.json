@@ -1,0 +1,9 @@
+{
+  "name": "com.chrome_tab_reader.host",
+  "description": "Chrome Tab Reader Native Messaging Host",
+  "path": "REPLACE_WITH_ABSOLUTE_PATH_TO_chrome_tab_native_host.py",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://REPLACE_WITH_YOUR_EXTENSION_ID/"
+  ]
+}

@@ -96,11 +96,116 @@ async function regenerateAccessToken() {
     return token;
 }
 
+// Native messaging port
+let nativePort = null;
+
+/**
+ * Connect to native messaging host
+ */
+function connectToNativeHost() {
+    try {
+        console.log("[Chrome Tab Reader] Connecting to native messaging host...");
+
+        nativePort = chrome.runtime.connectNative("com.chrome_tab_reader.host");
+
+        nativePort.onMessage.addListener(async (message) => {
+            console.log("[Chrome Tab Reader] Message from native host:", message);
+
+            try {
+                let response;
+                const requestId = message.request_id;
+
+                switch (message.action) {
+                    case "extract_current_tab":
+                        response = await extractCurrentTab(message.strategy || "three-phase");
+                        break;
+
+                    case "navigate_and_extract":
+                        if (!message.url) {
+                            response = {
+                                status: "error",
+                                error: "Missing 'url' parameter"
+                            };
+                        } else {
+                            response = await navigateAndExtract(
+                                message.url,
+                                message.strategy || "three-phase",
+                                message.wait_for_ms || 0
+                            );
+                        }
+                        break;
+
+                    case "get_current_tab":
+                        response = await getCurrentTabInfo();
+                        break;
+
+                    case "health_check":
+                        response = getHealthStatus();
+                        break;
+
+                    default:
+                        response = {
+                            status: "error",
+                            error: `Unknown action: ${message.action}`
+                        };
+                }
+
+                // Add request ID to response
+                if (requestId) {
+                    response.request_id = requestId;
+                }
+
+                // Send response back to native host
+                if (nativePort) {
+                    nativePort.postMessage(response);
+                }
+            } catch (error) {
+                console.error("[Chrome Tab Reader] Error handling native host message:", error);
+                const errorResponse = {
+                    status: "error",
+                    error: error.message || String(error)
+                };
+                if (message.request_id) {
+                    errorResponse.request_id = message.request_id;
+                }
+                if (nativePort) {
+                    nativePort.postMessage(errorResponse);
+                }
+            }
+        });
+
+        nativePort.onDisconnect.addListener(() => {
+            console.log("[Chrome Tab Reader] Native host disconnected");
+            if (chrome.runtime.lastError) {
+                console.error("[Chrome Tab Reader] Native host error:", chrome.runtime.lastError.message);
+            }
+            nativePort = null;
+
+            // Try to reconnect after 5 seconds
+            setTimeout(connectToNativeHost, 5000);
+        });
+
+        console.log("[Chrome Tab Reader] Connected to native messaging host");
+    } catch (error) {
+        console.error("[Chrome Tab Reader] Failed to connect to native host:", error);
+        nativePort = null;
+
+        // Try to reconnect after 5 seconds
+        setTimeout(connectToNativeHost, 5000);
+    }
+}
+
 // Initialize token on install
 chrome.runtime.onInstalled.addListener(async () => {
     await getAccessToken();
     console.log("[Chrome Tab Reader] Extension installed/updated");
+
+    // Connect to native messaging host
+    connectToNativeHost();
 });
+
+// Connect to native host on startup
+connectToNativeHost();
 
 /**
  * Check if a URL can have content scripts injected
@@ -424,6 +529,74 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 chrome.action.onClicked.addListener((tab) => {
     console.log("[Chrome Tab Reader] Action icon clicked");
     // Popup will open automatically, this is just for logging
+});
+
+/**
+ * Handle Native Messaging connections from MCP server
+ *
+ * This enables the MCP server to communicate directly with the extension
+ * without needing an HTTP server or AppleScript.
+ */
+chrome.runtime.onConnectExternal.addListener((port) => {
+    console.log("[Chrome Tab Reader] Native messaging connection established");
+
+    port.onMessage.addListener(async (request) => {
+        console.log("[Chrome Tab Reader] Received native message:", request.action);
+
+        try {
+            let response;
+
+            switch (request.action) {
+                case "extract_current_tab":
+                    response = await extractCurrentTab(request.strategy || "three-phase");
+                    break;
+
+                case "navigate_and_extract":
+                    if (!request.url) {
+                        response = {
+                            status: "error",
+                            error: "Missing 'url' parameter"
+                        };
+                    } else {
+                        response = await navigateAndExtract(
+                            request.url,
+                            request.strategy || "three-phase",
+                            request.wait_for_ms || 0
+                        );
+                    }
+                    break;
+
+                case "get_current_tab":
+                    response = await getCurrentTabInfo();
+                    break;
+
+                case "health_check":
+                    response = getHealthStatus();
+                    break;
+
+                default:
+                    response = {
+                        status: "error",
+                        error: `Unknown action: ${request.action}`
+                    };
+            }
+
+            port.postMessage(response);
+        } catch (error) {
+            console.error("[Chrome Tab Reader] Error handling native message:", error);
+            port.postMessage({
+                status: "error",
+                error: error.message || String(error)
+            });
+        }
+    });
+
+    port.onDisconnect.addListener(() => {
+        console.log("[Chrome Tab Reader] Native messaging connection closed");
+        if (chrome.runtime.lastError) {
+            console.error("[Chrome Tab Reader] Native messaging error:", chrome.runtime.lastError.message);
+        }
+    });
 });
 
 console.log("[Chrome Tab Reader] Service Worker ready");
