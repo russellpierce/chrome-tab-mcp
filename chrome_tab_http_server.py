@@ -384,42 +384,42 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
     <div class="endpoint">
         <div class="method">GET /api/health</div>
         <p>Health check</p>
-        <pre>{
+        <pre>{{
   "status": "ok",
   "extension_version": "1.0.0",
   "port": 8888
-}</pre>
+}}</pre>
     </div>
 
     <div class="endpoint">
         <div class="method">POST /api/extract</div>
         <p>Extract content from current tab</p>
         <pre>Request:
-{
+{{
   "action": "extract_current_tab",
   "strategy": "three-phase"
-}
+}}
 
 Response:
-{
+{{
   "status": "success",
   "content": "extracted text...",
   "title": "Page Title",
   "url": "https://example.com",
   "extraction_time_ms": 4500
-}</pre>
+}}</pre>
     </div>
 
     <div class="endpoint">
         <div class="method">POST /api/navigate_and_extract</div>
         <p>Navigate to URL and extract content</p>
         <pre>Request:
-{
+{{
   "action": "navigate_and_extract",
   "url": "https://example.com/page",
   "strategy": "three-phase",
   "wait_for_ms": 5000
-}
+}}
 
 Response: (same as extract)</pre>
     </div>
@@ -428,19 +428,19 @@ Response: (same as extract)</pre>
         <div class="method">GET /api/current_tab</div>
         <p>Get information about current tab</p>
         <pre>Response:
-{
+{{
   "tab_id": "unknown",
   "url": "https://example.com",
   "title": "Example",
   "is_loading": false
-}</pre>
+}}</pre>
     </div>
 
     <h2>Usage</h2>
     <pre>curl -X POST http://localhost:8888/api/extract \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \\
-  -d '{"action": "extract_current_tab", "strategy": "three-phase"}'</pre>
+  -d '{{"action": "extract_current_tab", "strategy": "three-phase"}}'</pre>
 
     <h2>Setup</h2>
     <ol>
@@ -448,23 +448,23 @@ Response: (same as extract)</pre>
         <li>Open the extension popup and copy your access token</li>
         <li>Create the tokens configuration file at:<br>
             <code>{config_path_display}</code>
-            <pre>{{
+            <pre>{{{{
   "tokens": ["your-token-here"],
   "note": "Get token from extension popup. You can add multiple tokens."
-}}</pre>
+}}}}</pre>
         </li>
         <li>Start this server and include the token in all API requests</li>
     </ol>
 
     <h2>Token File Structure</h2>
     <p>The tokens.json file should contain:</p>
-    <pre>{{
+    <pre>{{{{
   "tokens": [
     "64-char-hex-token-from-extension-1",
     "64-char-hex-token-from-extension-2"
   ],
   "note": "Optional: Add notes or descriptions here"
-}}</pre>
+}}}}</pre>
     <p><strong>TIP:</strong> Use the "Download Config File" button in the extension popup to automatically generate this file!</p>
 
 </body>
