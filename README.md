@@ -69,32 +69,35 @@ This repository contains three ways to access Chrome tab content:
 
 If you want to use the HTTP API:
 
-1. **Install Python dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Get your access token:**
+1. **Get your access token:**
    - Click the extension icon
    - Copy the access token shown at the top
 
-3. **Configure authentication:**
+2. **Configure authentication:**
    ```bash
    ./setup_token.sh
    # Or manually create the tokens.json file (see extension/docs for location)
    ```
 
-4. **Start the HTTP server:**
+3. **Start the HTTP server:**
+
+   **Option A - Using uv (recommended):**
    ```bash
+   uv run chrome_tab_http_server.py
+   ```
+
+   **Option B - Using pip:**
+   ```bash
+   pip install -r requirements.txt
    python chrome_tab_http_server.py
    ```
 
-5. **Explore the API:**
+4. **Explore the API:**
    - **Interactive Swagger UI:** http://localhost:8888/docs
    - **ReDoc Documentation:** http://localhost:8888/redoc
    - **OpenAPI Spec (JSON):** http://localhost:8888/openapi.json
 
-6. **Test it:**
+5. **Test it:**
    ```bash
    curl -H "Authorization: Bearer YOUR_TOKEN" \
         http://localhost:8888/api/health

@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.8"
+# dependencies = [
+#   "fastapi>=0.104.0",
+#   "uvicorn[standard]>=0.24.0",
+#   "platformdirs>=4.0.0",
+# ]
+# ///
 """
 Chrome Tab Reader - HTTP Server (FastAPI)
 
@@ -25,9 +33,8 @@ Access Control:
     - Windows: %APPDATA%\chrome-tab-reader\tokens.json
 
 Dependencies:
-  Required: fastapi, uvicorn
-  Optional: platformdirs (for proper XDG compliance, will fallback if not available)
-  Install with: pip install -r requirements.txt
+  Run with uv: uv run chrome_tab_http_server.py
+  Or install manually: pip install -r requirements.txt
 """
 
 import json
