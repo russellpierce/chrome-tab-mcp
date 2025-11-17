@@ -83,12 +83,43 @@ case "$TEST_TYPE" in
         echo -e "${GREEN}Running end-to-end tests...${NC}"
         echo -e "${YELLOW}Note: These tests require Chrome with extension loaded${NC}"
         echo ""
+
+        # Check if Playwright browsers are installed
+        echo -e "${BLUE}Checking Playwright browser installation...${NC}"
+        if ! uv run python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); p.chromium.launch(); p.stop()" 2>/dev/null; then
+            echo -e "${YELLOW}⚠ Playwright browsers not found or not properly installed${NC}"
+            echo ""
+            echo "Playwright browsers need to be installed to run e2e tests."
+            echo "This will download Chromium (approximately 150-300 MB)."
+            echo ""
+            read -p "Install Playwright browsers now using 'uv run playwright install chromium'? (y/n) " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${BLUE}Installing Playwright browsers...${NC}"
+                uv run playwright install chromium
+                if [ $? -eq 0 ]; then
+                    echo -e "${GREEN}✓ Playwright browsers installed successfully${NC}"
+                else
+                    echo -e "${RED}✗ Failed to install Playwright browsers${NC}"
+                    exit 1
+                fi
+            else
+                echo -e "${RED}Cannot run e2e tests without Playwright browsers${NC}"
+                echo "You can install them later by running:"
+                echo "  uv run playwright install chromium"
+                exit 1
+            fi
+        else
+            echo -e "${GREEN}✓ Playwright browsers found${NC}"
+        fi
+        echo ""
+
         echo "Prerequisites:"
+        echo "  ✓ Playwright browsers installed"
         echo "  1. Extension loaded in Chrome (chrome://extensions/)"
         echo "  2. Native messaging host installed"
-        echo "  3. Playwright installed (uv pip install playwright && uv run playwright install chrome)"
         echo ""
-        read -p "Continue? (y/n) " -n 1 -r
+        read -p "Continue with e2e tests? (y/n) " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             uv run pytest tests/test_e2e_native_messaging.py -v -m e2e -s
@@ -153,7 +184,7 @@ case "$TEST_TYPE" in
         echo "  ci           - Run CI-safe tests (no Chrome needed - for GitHub Actions)"
         echo "  unit         - Run unit tests (FastAPI schema, HTTP server, native messaging)"
         echo "  integration  - Run integration tests (requires native host)"
-        echo "  e2e          - Run end-to-end tests (requires Chrome + extension)"
+        echo "  e2e          - Run end-to-end tests (auto-checks & installs Playwright)"
         echo "  manual       - Run manual interactive test"
         echo "  coverage     - Run tests with coverage report"
         echo "  all          - Run all tests (default)"
@@ -164,12 +195,17 @@ case "$TEST_TYPE" in
         echo "  ✓ CI-safe:      ci, unit (no Chrome required)"
         echo "  ✗ Local only:   integration, e2e, manual (Chrome required)"
         echo ""
+        echo "Environment Setup:"
+        echo "  The 'e2e' test mode automatically checks environment setup and will"
+        echo "  prompt to install missing dependencies (e.g., Playwright browsers)"
+        echo "  within uv's managed .venv"
+        echo ""
         echo "Examples:"
         echo "  $0              # Run all tests"
         echo "  $0 ci           # CI-safe tests (for GitHub Actions)"
         echo "  $0 unit         # Quick unit tests (no Chrome needed)"
         echo "  $0 manual       # Test actual Chrome connection"
-        echo "  $0 e2e          # Full end-to-end test"
+        echo "  $0 e2e          # Full end-to-end test (auto-setup)"
         echo ""
         echo "Note: All tests use 'uv run' to ensure consistent Python environment"
         ;;
