@@ -11,7 +11,8 @@
     "5. Save this file to the platform-specific location shown below"
   ],
   "platform_specific_paths": {
-    "linux": "~/.config/chrome-tab-reader/tokens.json",
+    "linux": "$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json (or ~/.config/chrome-tab-reader/tokens.json if XDG_CONFIG_HOME not set)",
+    "linux_reference": "Linux follows XDG Base Directory Specification: https://specifications.freedesktop.org/basedir/latest/",
     "macos": "~/Library/Application Support/chrome-tab-reader/tokens.json",
     "windows": "%APPDATA%\\chrome-tab-reader\\tokens.json"
   }

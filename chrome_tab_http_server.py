@@ -17,7 +17,16 @@ Port: 8888 (configurable)
 
 Access Control:
   Requires Bearer token authentication for all API endpoints.
-  Configure valid tokens in ~/.chrome-tab-reader/tokens.json
+
+  Token configuration file location follows platform standards:
+    - Linux: $XDG_CONFIG_HOME/chrome-tab-reader/tokens.json (XDG Base Directory Specification)
+             Falls back to ~/.config/chrome-tab-reader/tokens.json if XDG_CONFIG_HOME not set
+    - macOS: ~/Library/Application Support/chrome-tab-reader/tokens.json
+    - Windows: %APPDATA%\chrome-tab-reader\tokens.json
+
+Dependencies:
+  Optional: platformdirs (for proper XDG compliance, will fallback if not available)
+  Install with: pip install platformdirs
 """
 
 import json
@@ -42,31 +51,49 @@ logger = logging.getLogger(__name__)
 
 
 def get_config_dir() -> Path:
-    """Get platform-specific config directory following XDG and OS standards.
+    """Get platform-specific config directory following XDG Base Directory Specification.
+
+    Uses platformdirs library for proper cross-platform support.
+    Falls back to manual implementation if platformdirs is not available.
 
     Returns:
         Path: Config directory for chrome-tab-reader
-            - Linux: ~/.config/chrome-tab-reader (XDG_CONFIG_HOME)
+            - Linux: $XDG_CONFIG_HOME/chrome-tab-reader or ~/.config/chrome-tab-reader
             - macOS: ~/Library/Application Support/chrome-tab-reader
             - Windows: %APPDATA%\\chrome-tab-reader
-    """
-    system = platform.system()
 
-    if system == "Windows":
-        # Windows: Use APPDATA
-        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-        return base / "chrome-tab-reader"
-    elif system == "Darwin":
-        # macOS: Use ~/Library/Application Support
-        return Path.home() / "Library" / "Application Support" / "chrome-tab-reader"
-    else:
-        # Linux and others: Use XDG_CONFIG_HOME or ~/.config
-        xdg_config = os.environ.get("XDG_CONFIG_HOME")
-        if xdg_config:
-            base = Path(xdg_config)
+    References:
+        - XDG Base Directory Specification: https://specifications.freedesktop.org/basedir/latest/
+        - platformdirs: https://github.com/platformdirs/platformdirs
+    """
+    try:
+        # Use platformdirs for proper XDG compliance and cross-platform support
+        import platformdirs
+        config_dir = Path(platformdirs.user_config_dir("chrome-tab-reader", appauthor=False))
+        logger.debug(f"Using platformdirs for config directory: {config_dir}")
+        return config_dir
+    except ImportError:
+        # Fallback implementation following XDG spec manually
+        logger.debug("platformdirs not available, using fallback implementation")
+        system = platform.system()
+
+        if system == "Windows":
+            # Windows: Use APPDATA
+            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+            return base / "chrome-tab-reader"
+        elif system == "Darwin":
+            # macOS: Use ~/Library/Application Support
+            return Path.home() / "Library" / "Application Support" / "chrome-tab-reader"
         else:
-            base = Path.home() / ".config"
-        return base / "chrome-tab-reader"
+            # Linux and others: Follow XDG Base Directory Specification
+            # XDG_CONFIG_HOME defines the base directory relative to which user-specific
+            # configuration files should be stored. If not set, defaults to ~/.config
+            xdg_config = os.environ.get("XDG_CONFIG_HOME")
+            if xdg_config:
+                base = Path(xdg_config)
+            else:
+                base = Path.home() / ".config"
+            return base / "chrome-tab-reader"
 
 
 # Token configuration
@@ -340,9 +367,10 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
         Your tokens file is located at:<br>
         <code class="platform-path">{config_path_display}</code><br><br>
         <strong>Platform-specific paths:</strong><br>
-        • Linux: <code>~/.config/chrome-tab-reader/tokens.json</code><br>
+        • Linux: <code>$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json</code> or <code>~/.config/chrome-tab-reader/tokens.json</code><br>
         • macOS: <code>~/Library/Application Support/chrome-tab-reader/tokens.json</code><br>
-        • Windows: <code>%APPDATA%\\chrome-tab-reader\\tokens.json</code>
+        • Windows: <code>%APPDATA%\\chrome-tab-reader\\tokens.json</code><br><br>
+        <small>Linux follows <a href="https://specifications.freedesktop.org/basedir/latest/" target="_blank">XDG Base Directory Specification</a></small>
     </div>
 
     <div class="auth-notice">

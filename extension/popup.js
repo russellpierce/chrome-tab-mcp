@@ -115,7 +115,8 @@ function initializePopup() {
         } else if (platform.includes('mac')) {
             configPath = '~/Library/Application Support/chrome-tab-reader/tokens.json';
         } else {
-            configPath = '~/.config/chrome-tab-reader/tokens.json';
+            // Linux: Follow XDG Base Directory Specification
+            configPath = '$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json or ~/.config/chrome-tab-reader/tokens.json';
         }
 
         // Create config file content
@@ -128,7 +129,8 @@ function initializePopup() {
                 "3. Restart your HTTP server after making changes"
             ],
             platform_specific_paths: {
-                linux: "~/.config/chrome-tab-reader/tokens.json",
+                linux: "$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json (or ~/.config/chrome-tab-reader/tokens.json if XDG_CONFIG_HOME not set)",
+                linux_reference: "Linux follows XDG Base Directory Specification: https://specifications.freedesktop.org/basedir/latest/",
                 macos: "~/Library/Application Support/chrome-tab-reader/tokens.json",
                 windows: "%APPDATA%\\chrome-tab-reader\\tokens.json"
             }
