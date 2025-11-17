@@ -11,8 +11,7 @@
 Chrome Tab Reader - HTTP Server (FastAPI)
 
 Provides HTTP API for Chrome tab content extraction.
-Currently uses AppleScript (macOS) or Chrome DevTools Protocol.
-Future: Will use extension via Native Messaging.
+Uses Chrome extension via Native Messaging protocol for cross-platform support.
 
 Endpoints:
   POST   /api/extract              - Extract current tab content
@@ -42,6 +41,7 @@ import sys
 import platform
 import subprocess
 import os
+import socket
 from pathlib import Path
 from typing import Dict, Any, Set, Optional, List
 import logging
@@ -58,6 +58,10 @@ logging.basicConfig(
     format='[Chrome Tab Reader] %(levelname)s: %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Native Messaging bridge configuration
+BRIDGE_HOST = "127.0.0.1"
+BRIDGE_PORT = 8765
 
 
 # ============================================================================
@@ -275,102 +279,127 @@ VALID_TOKENS = load_valid_tokens()
 
 
 # ============================================================================
-# Chrome Tab Extraction Logic
+# Chrome Tab Extraction Logic (via Native Messaging Bridge)
 # ============================================================================
 
 class ChromeTabExtractor:
-    """Extract content from Chrome tabs"""
+    """Extract content from Chrome tabs via Native Messaging bridge"""
 
     @staticmethod
-    def run_applescript(script_path: str) -> Dict[str, Any]:
-        """Run AppleScript and return JSON result"""
-        try:
-            result = subprocess.run(
-                ["osascript", script_path],
-                capture_output=True,
-                text=True,
-                timeout=300  # 5 minutes
-            )
+    def send_request_to_bridge(request: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Send a request to the Native Messaging bridge via TCP.
 
-            if result.returncode != 0:
-                return {
-                    "status": "error",
-                    "error": f"AppleScript error: {result.stderr}"
-                }
+        Args:
+            request: Request dictionary to send
+
+        Returns:
+            dict: Response from the bridge/extension
+        """
+        try:
+            # Connect to TCP bridge
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(60)  # 60 second timeout
 
             try:
-                return json.loads(result.stdout)
-            except json.JSONDecodeError:
+                sock.connect((BRIDGE_HOST, BRIDGE_PORT))
+            except ConnectionRefusedError:
                 return {
                     "status": "error",
-                    "error": f"Invalid JSON from AppleScript: {result.stdout[:200]}"
+                    "error": f"Native messaging bridge is not running on {BRIDGE_HOST}:{BRIDGE_PORT}. "
+                             f"Please ensure:\n1. Chrome extension is installed\n"
+                             f"2. Native messaging host is running\n3. Chrome is running with the extension loaded"
                 }
-        except subprocess.TimeoutExpired:
+            except Exception as e:
+                return {
+                    "status": "error",
+                    "error": f"Failed to connect to native messaging bridge at {BRIDGE_HOST}:{BRIDGE_PORT}: {str(e)}"
+                }
+
+            # Send request
+            request_json = json.dumps(request) + '\n'
+            sock.sendall(request_json.encode('utf-8'))
+
+            # Receive response
+            response_data = b''
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                response_data += chunk
+                if b'\n' in response_data:
+                    break
+
+            sock.close()
+
+            if not response_data:
+                return {
+                    "status": "error",
+                    "error": "No response from native messaging bridge"
+                }
+
+            # Parse response
+            response = json.loads(response_data.decode('utf-8').strip())
+            return response
+
+        except socket.timeout:
             return {
                 "status": "error",
-                "error": "AppleScript execution timeout (5 minutes)"
+                "error": "Timeout waiting for extension response (60 seconds)"
             }
         except Exception as e:
             return {
                 "status": "error",
-                "error": f"AppleScript error: {str(e)}"
+                "error": f"Error communicating with extension: {str(e)}"
             }
 
     @staticmethod
     def extract_current_tab() -> Dict[str, Any]:
-        """Extract current tab content"""
-        logger.info("Extracting current tab content")
+        """Extract current tab content via Native Messaging bridge"""
+        logger.info("Extracting current tab content via Native Messaging")
 
-        # macOS: Use AppleScript
-        if platform.system() == "Darwin":
-            script_path = Path(__file__).parent / "chrome_tab.scpt"
-            if not script_path.exists():
-                return {
-                    "status": "error",
-                    "error": "AppleScript not found at " + str(script_path)
-                }
-            return ChromeTabExtractor.run_applescript(str(script_path))
-
-        # Other platforms: Would use extension or other method
-        return {
-            "status": "error",
-            "error": "Tab extraction not yet implemented for " + platform.system() + ". "
-                     "Please use extension with Native Messaging support."
+        request = {
+            "action": "extract_current_tab",
+            "strategy": "three-phase"
         }
+
+        return ChromeTabExtractor.send_request_to_bridge(request)
 
     @staticmethod
     def navigate_and_extract(url: str, wait_for_ms: int = 0) -> Dict[str, Any]:
-        """Navigate to URL and extract content"""
+        """Navigate to URL and extract content via Native Messaging bridge"""
         logger.info(f"Navigate and extract: {url}")
 
-        # This would require AppleScript enhancement or extension with navigation
-        return {
-            "status": "error",
-            "error": "Navigate and extract not yet implemented. "
-                     "Use extract endpoint on the target page instead."
+        request = {
+            "action": "navigate_and_extract",
+            "url": url,
+            "strategy": "three-phase",
+            "wait_for_ms": wait_for_ms
         }
+
+        return ChromeTabExtractor.send_request_to_bridge(request)
 
     @staticmethod
     def get_current_tab_info() -> Dict[str, Any]:
-        """Get current tab info"""
-        logger.info("Getting current tab info")
+        """Get current tab info via Native Messaging bridge"""
+        logger.info("Getting current tab info via Native Messaging")
 
-        if platform.system() == "Darwin":
-            script_path = Path(__file__).parent / "chrome_tab.scpt"
-            result = ChromeTabExtractor.run_applescript(str(script_path))
-            if result.get("status") == "success":
-                return {
-                    "tab_id": "unknown",
-                    "url": result.get("url", ""),
-                    "title": result.get("title", ""),
-                    "is_loading": False
-                }
-            return result
-
-        return {
-            "status": "error",
-            "error": "Tab info not available"
+        request = {
+            "action": "get_current_tab_info"
         }
+
+        result = ChromeTabExtractor.send_request_to_bridge(request)
+
+        # If successful, format for TabInfoResponse
+        if result.get("status") == "success":
+            return {
+                "tab_id": "unknown",
+                "url": result.get("url", ""),
+                "title": result.get("title", ""),
+                "is_loading": False
+            }
+
+        return result
 
 
 # ============================================================================
@@ -380,13 +409,19 @@ class ChromeTabExtractor:
 app = FastAPI(
     title="Chrome Tab Reader API",
     description="""
-HTTP API for extracting content from Chrome tabs.
+HTTP API for extracting content from Chrome tabs using Native Messaging protocol.
 
 ## Features
-- Extract content from the currently active Chrome tab
+- Extract content from the currently active Chrome tab via Chrome extension
+- Three-phase extraction: lazy-loading, DOM stability, Readability.js cleaning
 - Bearer token authentication for security
+- Cross-platform support (Windows, macOS, Linux)
 - Cross-platform configuration (XDG-compliant on Linux)
 - Support for multiple extraction strategies
+
+## Requirements
+- Chrome browser with Chrome Tab Reader extension installed
+- Native messaging host running (`chrome_tab_native_host.py`)
 
 ## Authentication
 All endpoints (except documentation) require Bearer token authentication.
@@ -533,12 +568,12 @@ async def extract_tab_content(
     response_model=ExtractionResponse,
     tags=["Content Extraction"],
     summary="Navigate to URL and extract content",
-    description="Navigate Chrome to a specific URL and extract its content. Currently not implemented - returns error.",
+    description="Navigate Chrome to a specific URL and extract its content via the Chrome extension.",
     responses={
         200: {"description": "Navigation and extraction successful"},
         400: {"model": ErrorResponse, "description": "Bad request - missing required URL parameter"},
         401: {"model": ErrorResponse, "description": "Unauthorized - Invalid or missing Bearer token"},
-        500: {"description": "Not yet implemented or internal server error"}
+        500: {"description": "Internal server error or extension communication error"}
     }
 )
 async def navigate_and_extract(
@@ -548,8 +583,12 @@ async def navigate_and_extract(
     """
     Navigate to a URL and extract its content.
 
-    **Note**: This endpoint is not yet fully implemented and will return an error.
-    Use the `/api/extract` endpoint on the target page instead.
+    Sends a navigation request to the Chrome extension, which will:
+    1. Navigate to the specified URL
+    2. Wait for the specified duration (wait_for_ms)
+    3. Extract content using the specified strategy
+
+    The extension uses the three-phase extraction process by default.
     """
     logger.info(f"Navigate and extract request: url={request.url}, strategy={request.strategy}")
     result = ChromeTabExtractor.navigate_and_extract(request.url, request.wait_for_ms)
@@ -582,7 +621,10 @@ Interactive API documentation available at:
   - ReDoc: http://localhost:8888/redoc
   - OpenAPI JSON: http://localhost:8888/openapi.json
 
-Note: On macOS, this requires chrome_tab.scpt in the same directory.
+Requirements:
+  - Chrome extension installed and running
+  - Native messaging host running (chrome_tab_native_host.py)
+  - Chrome browser with extension loaded
         """
     )
 
@@ -592,15 +634,8 @@ Note: On macOS, this requires chrome_tab.scpt in the same directory.
 
     args = parser.parse_args()
 
-    # Verify prerequisites
-    if platform.system() == "Darwin":
-        script_path = Path(__file__).parent / "chrome_tab.scpt"
-        if not script_path.exists():
-            logger.error(f"chrome_tab.scpt not found at {script_path}")
-            logger.error("Please make sure the AppleScript file is in the same directory")
-            sys.exit(1)
-
     logger.info(f"Starting Chrome Tab Reader HTTP server on {args.host}:{args.port}")
+    logger.info(f"Native Messaging bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")
     logger.info(f"Interactive API documentation:")
     logger.info(f"  - Swagger UI: http://{args.host}:{args.port}/docs")
     logger.info(f"  - ReDoc: http://{args.host}:{args.port}/redoc")
