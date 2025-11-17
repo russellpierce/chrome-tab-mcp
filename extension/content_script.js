@@ -123,8 +123,8 @@ async function extractPageContent(strategy = "three-phase") {
             // Phase 1: Trigger lazy-loading (up to 5 seconds)
             await triggerLazyLoading(5, 500);
 
-            // Phase 2: Wait for DOM stability (up to 3 minutes)
-            await waitForDOMStability(180000, 2000);
+            // Phase 2: Wait for DOM stability (up to 30 seconds)
+            await waitForDOMStability(30000, 2000);
 
             // Phase 3: Extract with Readability
             var content = extractCleanContent();
@@ -134,7 +134,7 @@ async function extractPageContent(strategy = "three-phase") {
         } else {
             console.warn(`[Chrome Tab Reader] Unknown strategy: ${strategy}, using three-phase`);
             await triggerLazyLoading(5, 500);
-            await waitForDOMStability(180000, 2000);
+            await waitForDOMStability(30000, 2000);
             content = extractCleanContent();
         }
 
