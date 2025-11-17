@@ -17,7 +17,16 @@ Port: 8888 (configurable)
 
 Access Control:
   Requires Bearer token authentication for all API endpoints.
-  Configure valid tokens in ~/.chrome-tab-reader/tokens.json
+
+  Token configuration file location follows platform standards:
+    - Linux: $XDG_CONFIG_HOME/chrome-tab-reader/tokens.json (XDG Base Directory Specification)
+             Falls back to ~/.config/chrome-tab-reader/tokens.json if XDG_CONFIG_HOME not set
+    - macOS: ~/Library/Application Support/chrome-tab-reader/tokens.json
+    - Windows: %APPDATA%\chrome-tab-reader\tokens.json
+
+Dependencies:
+  Optional: platformdirs (for proper XDG compliance, will fallback if not available)
+  Install with: pip install platformdirs
 """
 
 import json
@@ -26,6 +35,7 @@ import platform
 import subprocess
 import threading
 import time
+import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
@@ -39,8 +49,55 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def get_config_dir() -> Path:
+    """Get platform-specific config directory following XDG Base Directory Specification.
+
+    Uses platformdirs library for proper cross-platform support.
+    Falls back to manual implementation if platformdirs is not available.
+
+    Returns:
+        Path: Config directory for chrome-tab-reader
+            - Linux: $XDG_CONFIG_HOME/chrome-tab-reader or ~/.config/chrome-tab-reader
+            - macOS: ~/Library/Application Support/chrome-tab-reader
+            - Windows: %APPDATA%\\chrome-tab-reader
+
+    References:
+        - XDG Base Directory Specification: https://specifications.freedesktop.org/basedir/latest/
+        - platformdirs: https://github.com/platformdirs/platformdirs
+    """
+    try:
+        # Use platformdirs for proper XDG compliance and cross-platform support
+        import platformdirs
+        config_dir = Path(platformdirs.user_config_dir("chrome-tab-reader", appauthor=False))
+        logger.debug(f"Using platformdirs for config directory: {config_dir}")
+        return config_dir
+    except ImportError:
+        # Fallback implementation following XDG spec manually
+        logger.debug("platformdirs not available, using fallback implementation")
+        system = platform.system()
+
+        if system == "Windows":
+            # Windows: Use APPDATA
+            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+            return base / "chrome-tab-reader"
+        elif system == "Darwin":
+            # macOS: Use ~/Library/Application Support
+            return Path.home() / "Library" / "Application Support" / "chrome-tab-reader"
+        else:
+            # Linux and others: Follow XDG Base Directory Specification
+            # XDG_CONFIG_HOME defines the base directory relative to which user-specific
+            # configuration files should be stored. If not set, defaults to ~/.config
+            xdg_config = os.environ.get("XDG_CONFIG_HOME")
+            if xdg_config:
+                base = Path(xdg_config)
+            else:
+                base = Path.home() / ".config"
+            return base / "chrome-tab-reader"
+
+
 # Token configuration
-CONFIG_DIR = Path.home() / ".chrome-tab-reader"
+CONFIG_DIR = get_config_dir()
 TOKENS_FILE = CONFIG_DIR / "tokens.json"
 
 def load_valid_tokens() -> Set[str]:
@@ -182,7 +239,7 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
         """Send 401 Unauthorized response"""
         response = {
             "error": "Unauthorized",
-            "message": "Valid Bearer token required. Configure tokens in ~/.chrome-tab-reader/tokens.json"
+            "message": f"Valid Bearer token required. Configure tokens in {TOKENS_FILE}"
         }
         self.send_json_response(401, response)
 
@@ -279,18 +336,25 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
 
     def send_api_docs(self):
         """Send API documentation"""
-        docs = """
+        # Get platform-specific config path for display
+        config_path_display = str(TOKENS_FILE)
+
+        docs = f"""
 <!DOCTYPE html>
 <html>
 <head>
     <title>Chrome Tab Reader API</title>
     <style>
-        body { font-family: monospace; max-width: 800px; margin: 40px; }
-        h1 { color: #333; }
-        .auth-notice { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px; }
-        .endpoint { background: #f5f5f5; padding: 10px; margin: 10px 0; border-left: 3px solid #007bff; }
-        .method { font-weight: bold; color: #007bff; }
-        pre { background: #f9f9f9; padding: 10px; overflow-x: auto; }
+        body {{ font-family: monospace; max-width: 900px; margin: 40px; line-height: 1.6; }}
+        h1 {{ color: #333; }}
+        h2 {{ color: #555; margin-top: 30px; }}
+        .auth-notice {{ background: #fff3cd; border: 1px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px; }}
+        .config-info {{ background: #d1ecf1; border: 1px solid #0c5460; padding: 15px; margin: 15px 0; border-radius: 4px; }}
+        .endpoint {{ background: #f5f5f5; padding: 10px; margin: 10px 0; border-left: 3px solid #007bff; }}
+        .method {{ font-weight: bold; color: #007bff; }}
+        pre {{ background: #f9f9f9; padding: 10px; overflow-x: auto; border: 1px solid #ddd; border-radius: 3px; }}
+        code {{ background: #f0f0f0; padding: 2px 6px; border-radius: 3px; }}
+        .platform-path {{ font-weight: bold; color: #0056b3; }}
     </style>
 </head>
 <body>
@@ -298,11 +362,21 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
 
     <p>Base URL: http://localhost:8888</p>
 
+    <div class="config-info">
+        <strong>Configuration File Location</strong><br>
+        Your tokens file is located at:<br>
+        <code class="platform-path">{config_path_display}</code><br><br>
+        <strong>Platform-specific paths:</strong><br>
+        • Linux: <code>$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json</code> or <code>~/.config/chrome-tab-reader/tokens.json</code><br>
+        • macOS: <code>~/Library/Application Support/chrome-tab-reader/tokens.json</code><br>
+        • Windows: <code>%APPDATA%\\chrome-tab-reader\\tokens.json</code><br><br>
+        <small>Linux follows <a href="https://specifications.freedesktop.org/basedir/latest/" target="_blank">XDG Base Directory Specification</a></small>
+    </div>
+
     <div class="auth-notice">
         <strong>Authentication Required</strong><br>
         All API endpoints (except this documentation page) require Bearer token authentication.<br>
-        Get your token from the Chrome extension popup, then add it to:<br>
-        <code>~/.chrome-tab-reader/tokens.json</code>
+        Get your token from the Chrome extension popup, then add it to the configuration file shown above.
     </div>
 
     <h2>Endpoints</h2>
@@ -310,42 +384,42 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
     <div class="endpoint">
         <div class="method">GET /api/health</div>
         <p>Health check</p>
-        <pre>{
+        <pre>{{
   "status": "ok",
   "extension_version": "1.0.0",
   "port": 8888
-}</pre>
+}}</pre>
     </div>
 
     <div class="endpoint">
         <div class="method">POST /api/extract</div>
         <p>Extract content from current tab</p>
         <pre>Request:
-{
+{{
   "action": "extract_current_tab",
   "strategy": "three-phase"
-}
+}}
 
 Response:
-{
+{{
   "status": "success",
   "content": "extracted text...",
   "title": "Page Title",
   "url": "https://example.com",
   "extraction_time_ms": 4500
-}</pre>
+}}</pre>
     </div>
 
     <div class="endpoint">
         <div class="method">POST /api/navigate_and_extract</div>
         <p>Navigate to URL and extract content</p>
         <pre>Request:
-{
+{{
   "action": "navigate_and_extract",
   "url": "https://example.com/page",
   "strategy": "three-phase",
   "wait_for_ms": 5000
-}
+}}
 
 Response: (same as extract)</pre>
     </div>
@@ -354,32 +428,44 @@ Response: (same as extract)</pre>
         <div class="method">GET /api/current_tab</div>
         <p>Get information about current tab</p>
         <pre>Response:
-{
+{{
   "tab_id": "unknown",
   "url": "https://example.com",
   "title": "Example",
   "is_loading": false
-}</pre>
+}}</pre>
     </div>
 
     <h2>Usage</h2>
     <pre>curl -X POST http://localhost:8888/api/extract \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \\
-  -d '{"action": "extract_current_tab", "strategy": "three-phase"}'</pre>
+  -d '{{"action": "extract_current_tab", "strategy": "three-phase"}}'</pre>
 
     <h2>Setup</h2>
     <ol>
         <li>Install the Chrome Tab Reader extension</li>
         <li>Open the extension popup and copy your access token</li>
-        <li>Add the token to ~/.chrome-tab-reader/tokens.json:
-            <pre>{
+        <li>Create the tokens configuration file at:<br>
+            <code>{config_path_display}</code>
+            <pre>{{{{
   "tokens": ["your-token-here"],
-  "note": "Get token from extension popup"
-}</pre>
+  "note": "Get token from extension popup. You can add multiple tokens."
+}}}}</pre>
         </li>
         <li>Start this server and include the token in all API requests</li>
     </ol>
+
+    <h2>Token File Structure</h2>
+    <p>The tokens.json file should contain:</p>
+    <pre>{{{{
+  "tokens": [
+    "64-char-hex-token-from-extension-1",
+    "64-char-hex-token-from-extension-2"
+  ],
+  "note": "Optional: Add notes or descriptions here"
+}}}}</pre>
+    <p><strong>TIP:</strong> Use the "Download Config File" button in the extension popup to automatically generate this file!</p>
 
 </body>
 </html>

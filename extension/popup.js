@@ -13,11 +13,16 @@ function initializePopup() {
     const accessTokenEl = document.getElementById('accessToken');
     const copyTokenBtn = document.getElementById('copyTokenBtn');
     const regenerateTokenBtn = document.getElementById('regenerateTokenBtn');
+    const downloadConfigBtn = document.getElementById('downloadConfigBtn');
     const tabTitleEl = document.getElementById('tabTitle');
     const extractBtn = document.getElementById('extractBtn');
     const clearBtn = document.getElementById('clearBtn');
     const statusEl = document.getElementById('status');
     const contentAreaEl = document.getElementById('contentArea');
+    const consoleOutputEl = document.getElementById('consoleOutput');
+    const consoleHeaderEl = document.getElementById('consoleHeader');
+    const consoleToggleEl = document.getElementById('consoleToggle');
+    const consoleClearBtn = document.getElementById('consoleClearBtn');
 
     // Load and display access token
     loadAccessToken();
@@ -25,11 +30,25 @@ function initializePopup() {
     // Update tab title on load
     updateTabTitle();
 
+    // Set up console
+    initializeConsole();
+
     // Set up event listeners
     copyTokenBtn.addEventListener('click', () => copyAccessToken());
     regenerateTokenBtn.addEventListener('click', () => regenerateAccessToken());
+    downloadConfigBtn.addEventListener('click', () => downloadConfigFile());
     extractBtn.addEventListener('click', () => extractCurrentTab(statusEl, contentAreaEl, extractBtn));
     clearBtn.addEventListener('click', () => clearContent(contentAreaEl));
+    consoleHeaderEl.addEventListener('click', (e) => {
+        // Don't toggle if clicking the clear button
+        if (e.target !== consoleClearBtn) {
+            toggleConsole();
+        }
+    });
+    consoleClearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearConsole();
+    });
 
     /**
      * Load and display access token
@@ -45,17 +64,48 @@ function initializePopup() {
     }
 
     /**
-     * Copy access token to clipboard
+     * Copy access token to clipboard as complete JSON config
      */
     function copyAccessToken() {
         const token = accessTokenEl.textContent;
-        navigator.clipboard.writeText(token).then(() => {
-            showStatus(statusEl, 'success', 'Token copied to clipboard');
+
+        if (!token || token === 'Loading...' || token === 'Error loading token') {
+            showStatus(statusEl, 'error', 'No valid token available');
+            return;
+        }
+
+        // Detect platform for appropriate file path
+        const platform = navigator.platform.toLowerCase();
+        let configPath = '';
+        if (platform.includes('win')) {
+            configPath = '%APPDATA%\\chrome-tab-reader\\tokens.json';
+        } else if (platform.includes('mac')) {
+            configPath = '~/Library/Application Support/chrome-tab-reader/tokens.json';
+        } else {
+            // Linux: Follow XDG Base Directory Specification
+            configPath = '$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json or ~/.config/chrome-tab-reader/tokens.json';
+        }
+
+        // Create complete JSON config ready to save
+        const config = {
+            tokens: [token],
+            note: "Chrome Tab Reader access token. Get new tokens from the extension popup.",
+            instructions: [
+                "1. Save this file to: " + configPath,
+                "2. You can add multiple tokens to the 'tokens' array",
+                "3. Restart your HTTP server after making changes"
+            ]
+        };
+
+        const configJSON = JSON.stringify(config, null, 2);
+
+        navigator.clipboard.writeText(configJSON).then(() => {
+            showStatus(statusEl, 'success', `Config JSON copied! Save to: ${configPath}`);
             setTimeout(() => {
                 statusEl.className = 'status';
-            }, 2000);
+            }, 5000);
         }).catch(err => {
-            showStatus(statusEl, 'error', 'Failed to copy token');
+            showStatus(statusEl, 'error', 'Failed to copy to clipboard');
         });
     }
 
@@ -75,6 +125,65 @@ function initializePopup() {
                 showStatus(statusEl, 'error', 'Failed to regenerate token');
             }
         });
+    }
+
+    /**
+     * Download configuration file for HTTP server
+     */
+    function downloadConfigFile() {
+        const token = accessTokenEl.textContent;
+
+        if (!token || token === 'Loading...' || token === 'Error loading token') {
+            showStatus(statusEl, 'error', 'No valid token available');
+            return;
+        }
+
+        // Detect platform for appropriate instructions
+        const platform = navigator.platform.toLowerCase();
+        let configPath = '';
+        if (platform.includes('win')) {
+            configPath = '%APPDATA%\\chrome-tab-reader\\tokens.json';
+        } else if (platform.includes('mac')) {
+            configPath = '~/Library/Application Support/chrome-tab-reader/tokens.json';
+        } else {
+            // Linux: Follow XDG Base Directory Specification
+            configPath = '$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json or ~/.config/chrome-tab-reader/tokens.json';
+        }
+
+        // Create config file content
+        const config = {
+            tokens: [token],
+            note: "Chrome Tab Reader access token. Get new tokens from the extension popup.",
+            instructions: [
+                "1. Save this file to: " + configPath,
+                "2. You can add multiple tokens to the 'tokens' array",
+                "3. Restart your HTTP server after making changes"
+            ],
+            platform_specific_paths: {
+                linux: "$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json (or ~/.config/chrome-tab-reader/tokens.json if XDG_CONFIG_HOME not set)",
+                linux_reference: "Linux follows XDG Base Directory Specification: https://specifications.freedesktop.org/basedir/latest/",
+                macos: "~/Library/Application Support/chrome-tab-reader/tokens.json",
+                windows: "%APPDATA%\\chrome-tab-reader\\tokens.json"
+            }
+        };
+
+        const configJSON = JSON.stringify(config, null, 2);
+        const blob = new Blob([configJSON], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        // Create download link and trigger download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'tokens.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showStatus(statusEl, 'success', 'Config file downloaded! Save to: ' + configPath);
+        setTimeout(() => {
+            statusEl.className = 'status';
+        }, 5000);
     }
 
     /**
@@ -158,4 +267,72 @@ function initializePopup() {
         statusEl.textContent = message;
         statusEl.className = `status ${type}`;
     }
+
+    /**
+     * Initialize console display
+     */
+    function initializeConsole() {
+        // Listen for log messages from background and content scripts
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.type === 'console_log') {
+                addConsoleLog(message.level || 'info', message.message, message.source);
+            }
+        });
+
+        // Add initial message
+        addConsoleLog('info', 'Popup initialized', 'popup');
+    }
+
+    /**
+     * Toggle console visibility
+     */
+    function toggleConsole() {
+        const isOpen = consoleOutputEl.classList.toggle('open');
+        consoleToggleEl.textContent = isOpen ? '▲' : '▼';
+    }
+
+    /**
+     * Clear console output
+     */
+    function clearConsole() {
+        consoleOutputEl.innerHTML = '';
+        addConsoleLog('info', 'Console cleared', 'popup');
+    }
+
+    /**
+     * Add a log message to the console display
+     */
+    function addConsoleLog(level, message, source) {
+        const logEntry = document.createElement('div');
+        logEntry.className = `console-log ${level}`;
+
+        const timestamp = new Date().toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            fractionalSecondDigits: 3
+        });
+
+        const sourcePrefix = source ? `[${source}] ` : '';
+        logEntry.textContent = `${timestamp} ${sourcePrefix}${message}`;
+
+        consoleOutputEl.appendChild(logEntry);
+
+        // Auto-scroll to bottom
+        consoleOutputEl.scrollTop = consoleOutputEl.scrollHeight;
+
+        // Keep max 100 log entries to prevent memory issues
+        while (consoleOutputEl.children.length > 100) {
+            consoleOutputEl.removeChild(consoleOutputEl.firstChild);
+        }
+
+        // Auto-open console on error or warn
+        if ((level === 'error' || level === 'warn') && !consoleOutputEl.classList.contains('open')) {
+            toggleConsole();
+        }
+    }
+
+    // Expose functions for use in the popup scope
+    window.addConsoleLog = addConsoleLog;
 }

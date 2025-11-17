@@ -1,0 +1,12 @@
+# Chrome Tab Reader - Python Dependencies
+
+# Optional: For proper XDG Base Directory Specification compliance on Linux
+# and cross-platform config directory support
+# If not installed, will fall back to manual implementation
+platformdirs>=4.0.0
+
+# Note: The HTTP server (chrome_tab_http_server.py) will work without
+# platformdirs, but installing it is recommended for better compliance
+# with system standards.
+#
+# Install with: pip install -r requirements.txt

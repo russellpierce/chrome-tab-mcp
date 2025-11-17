@@ -2,6 +2,18 @@
   "tokens": [
     "your-extension-token-here"
   ],
-  "note": "Add your Chrome Tab Reader extension access token here. Get it from the extension popup (click the extension icon, then copy the token).",
-  "instructions": "1. Install the Chrome Tab Reader extension. 2. Click the extension icon to open the popup. 3. Copy the Access Token shown at the top. 4. Paste it in the 'tokens' array above. 5. Save this file to ~/.chrome-tab-reader/tokens.json"
+  "note": "Chrome Tab Reader access token. Get new tokens from the extension popup.",
+  "instructions": [
+    "1. Install the Chrome Tab Reader extension",
+    "2. Click the extension icon to open the popup",
+    "3. Click 'Download Config File' button to get a pre-filled version of this file",
+    "4. OR copy the Access Token and paste it in the 'tokens' array above",
+    "5. Save this file to the platform-specific location shown below"
+  ],
+  "platform_specific_paths": {
+    "linux": "$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json (or ~/.config/chrome-tab-reader/tokens.json if XDG_CONFIG_HOME not set)",
+    "linux_reference": "Linux follows XDG Base Directory Specification: https://specifications.freedesktop.org/basedir/latest/",
+    "macos": "~/Library/Application Support/chrome-tab-reader/tokens.json",
+    "windows": "%APPDATA%\\chrome-tab-reader\\tokens.json"
+  }
 }

@@ -7,6 +7,57 @@
  * - Delegates to content script for actual extraction
  */
 
+// Intercept console.log to send to popup
+(function() {
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    function sendLogToPopup(level, args) {
+        const message = Array.from(args).map(arg => {
+            if (typeof arg === 'object') {
+                try {
+                    return JSON.stringify(arg);
+                } catch (e) {
+                    return String(arg);
+                }
+            }
+            return String(arg);
+        }).join(' ');
+
+        // Send to all extension contexts (popup)
+        chrome.runtime.sendMessage({
+            type: 'console_log',
+            level: level,
+            message: message,
+            source: 'service-worker'
+        }).catch(() => {
+            // Popup might not be open, ignore errors
+        });
+    }
+
+    console.log = function(...args) {
+        originalLog.apply(console, args);
+        if (args[0] && args[0].includes('[Chrome Tab Reader]')) {
+            sendLogToPopup('info', args);
+        }
+    };
+
+    console.warn = function(...args) {
+        originalWarn.apply(console, args);
+        if (args[0] && args[0].includes('[Chrome Tab Reader]')) {
+            sendLogToPopup('warn', args);
+        }
+    };
+
+    console.error = function(...args) {
+        originalError.apply(console, args);
+        if (args[0] && args[0].includes('[Chrome Tab Reader]')) {
+            sendLogToPopup('error', args);
+        }
+    };
+})();
+
 console.log("[Chrome Tab Reader] Service Worker loaded");
 
 /**
@@ -45,11 +96,175 @@ async function regenerateAccessToken() {
     return token;
 }
 
+// Native messaging port
+let nativePort = null;
+
+/**
+ * Connect to native messaging host
+ */
+function connectToNativeHost() {
+    try {
+        console.log("[Chrome Tab Reader] Connecting to native messaging host...");
+
+        nativePort = chrome.runtime.connectNative("com.chrome_tab_reader.host");
+
+        nativePort.onMessage.addListener(async (message) => {
+            console.log("[Chrome Tab Reader] Message from native host:", message);
+
+            try {
+                let response;
+                const requestId = message.request_id;
+
+                switch (message.action) {
+                    case "extract_current_tab":
+                        response = await extractCurrentTab(message.strategy || "three-phase");
+                        break;
+
+                    case "navigate_and_extract":
+                        if (!message.url) {
+                            response = {
+                                status: "error",
+                                error: "Missing 'url' parameter"
+                            };
+                        } else {
+                            response = await navigateAndExtract(
+                                message.url,
+                                message.strategy || "three-phase",
+                                message.wait_for_ms || 0
+                            );
+                        }
+                        break;
+
+                    case "get_current_tab":
+                        response = await getCurrentTabInfo();
+                        break;
+
+                    case "health_check":
+                        response = getHealthStatus();
+                        break;
+
+                    default:
+                        response = {
+                            status: "error",
+                            error: `Unknown action: ${message.action}`
+                        };
+                }
+
+                // Add request ID to response
+                if (requestId) {
+                    response.request_id = requestId;
+                }
+
+                // Send response back to native host
+                if (nativePort) {
+                    nativePort.postMessage(response);
+                }
+            } catch (error) {
+                console.error("[Chrome Tab Reader] Error handling native host message:", error);
+                const errorResponse = {
+                    status: "error",
+                    error: error.message || String(error)
+                };
+                if (message.request_id) {
+                    errorResponse.request_id = message.request_id;
+                }
+                if (nativePort) {
+                    nativePort.postMessage(errorResponse);
+                }
+            }
+        });
+
+        nativePort.onDisconnect.addListener(() => {
+            console.log("[Chrome Tab Reader] Native host disconnected");
+            if (chrome.runtime.lastError) {
+                console.error("[Chrome Tab Reader] Native host error:", chrome.runtime.lastError.message);
+            }
+            nativePort = null;
+
+            // Try to reconnect after 5 seconds
+            setTimeout(connectToNativeHost, 5000);
+        });
+
+        console.log("[Chrome Tab Reader] Connected to native messaging host");
+    } catch (error) {
+        console.error("[Chrome Tab Reader] Failed to connect to native host:", error);
+        nativePort = null;
+
+        // Try to reconnect after 5 seconds
+        setTimeout(connectToNativeHost, 5000);
+    }
+}
+
 // Initialize token on install
 chrome.runtime.onInstalled.addListener(async () => {
     await getAccessToken();
     console.log("[Chrome Tab Reader] Extension installed/updated");
+
+    // Connect to native messaging host
+    connectToNativeHost();
 });
+
+// Connect to native host on startup
+connectToNativeHost();
+
+/**
+ * Check if a URL can have content scripts injected
+ */
+function canInjectContentScript(url) {
+    if (!url) return false;
+
+    const restrictedProtocols = ['chrome:', 'chrome-extension:', 'about:', 'edge:', 'browser:'];
+    const restrictedPages = ['chrome://newtab/', 'chrome://extensions/', 'about:blank'];
+
+    // Check if URL starts with restricted protocol
+    for (const protocol of restrictedProtocols) {
+        if (url.startsWith(protocol)) {
+            return false;
+        }
+    }
+
+    // Check if URL is a restricted page
+    for (const page of restrictedPages) {
+        if (url.startsWith(page)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Ensure content script is injected in the tab
+ */
+async function ensureContentScriptInjected(tabId) {
+    try {
+        // Try to ping the content script
+        const response = await chrome.tabs.sendMessage(tabId, { action: "getPageInfo" });
+        console.log("[Chrome Tab Reader] Content script already loaded");
+        return true;
+    } catch (error) {
+        // Content script not loaded, try to inject it
+        console.log("[Chrome Tab Reader] Content script not detected, attempting injection");
+
+        try {
+            // Inject the libraries first
+            await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                files: ['lib/readability.min.js', 'lib/dompurify.min.js', 'content_script.js']
+            });
+
+            console.log("[Chrome Tab Reader] Content script injected successfully");
+
+            // Wait a moment for the script to initialize
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            return true;
+        } catch (injectError) {
+            console.error("[Chrome Tab Reader] Failed to inject content script:", injectError);
+            return false;
+        }
+    }
+}
 
 /**
  * Extract content from a specific tab
@@ -58,6 +273,28 @@ async function extractFromTab(tabId, strategy = "three-phase") {
     console.log(`[Chrome Tab Reader] Extracting from tab ${tabId} with strategy: ${strategy}`);
 
     try {
+        // Get tab info to check URL
+        const tab = await chrome.tabs.get(tabId);
+
+        // Check if we can inject content scripts on this page
+        if (!canInjectContentScript(tab.url)) {
+            console.warn(`[Chrome Tab Reader] Cannot extract from restricted page: ${tab.url}`);
+            return {
+                status: "error",
+                error: `Cannot extract content from this type of page (${new URL(tab.url).protocol}). Please navigate to a regular webpage.`
+            };
+        }
+
+        // Ensure content script is injected
+        const injected = await ensureContentScriptInjected(tabId);
+        if (!injected) {
+            return {
+                status: "error",
+                error: "Failed to inject content script. Please try refreshing the page."
+            };
+        }
+
+        // Send extraction request to content script
         const response = await chrome.tabs.sendMessage(tabId, {
             action: "extractContent",
             strategy: strategy
@@ -219,9 +456,19 @@ function getHealthStatus() {
 }
 
 /**
- * Handle messages from popup
+ * Handle messages from popup and content scripts
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // Handle console log messages from content scripts - relay to popup
+    if (request.type === 'console_log') {
+        // Don't log this message to avoid infinite loop
+        // Just relay it to the popup
+        chrome.runtime.sendMessage(request).catch(() => {
+            // Popup might not be open, ignore
+        });
+        return false;
+    }
+
     console.log("[Chrome Tab Reader] Service worker received message:", request.action);
 
     if (request.action === "extract_current_tab") {
@@ -282,6 +529,74 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 chrome.action.onClicked.addListener((tab) => {
     console.log("[Chrome Tab Reader] Action icon clicked");
     // Popup will open automatically, this is just for logging
+});
+
+/**
+ * Handle Native Messaging connections from MCP server
+ *
+ * This enables the MCP server to communicate directly with the extension
+ * without needing an HTTP server or AppleScript.
+ */
+chrome.runtime.onConnectExternal.addListener((port) => {
+    console.log("[Chrome Tab Reader] Native messaging connection established");
+
+    port.onMessage.addListener(async (request) => {
+        console.log("[Chrome Tab Reader] Received native message:", request.action);
+
+        try {
+            let response;
+
+            switch (request.action) {
+                case "extract_current_tab":
+                    response = await extractCurrentTab(request.strategy || "three-phase");
+                    break;
+
+                case "navigate_and_extract":
+                    if (!request.url) {
+                        response = {
+                            status: "error",
+                            error: "Missing 'url' parameter"
+                        };
+                    } else {
+                        response = await navigateAndExtract(
+                            request.url,
+                            request.strategy || "three-phase",
+                            request.wait_for_ms || 0
+                        );
+                    }
+                    break;
+
+                case "get_current_tab":
+                    response = await getCurrentTabInfo();
+                    break;
+
+                case "health_check":
+                    response = getHealthStatus();
+                    break;
+
+                default:
+                    response = {
+                        status: "error",
+                        error: `Unknown action: ${request.action}`
+                    };
+            }
+
+            port.postMessage(response);
+        } catch (error) {
+            console.error("[Chrome Tab Reader] Error handling native message:", error);
+            port.postMessage({
+                status: "error",
+                error: error.message || String(error)
+            });
+        }
+    });
+
+    port.onDisconnect.addListener(() => {
+        console.log("[Chrome Tab Reader] Native messaging connection closed");
+        if (chrome.runtime.lastError) {
+            console.error("[Chrome Tab Reader] Native messaging error:", chrome.runtime.lastError.message);
+        }
+    });
 });
 
 console.log("[Chrome Tab Reader] Service Worker ready");
