@@ -13,6 +13,7 @@ function initializePopup() {
     const accessTokenEl = document.getElementById('accessToken');
     const copyTokenBtn = document.getElementById('copyTokenBtn');
     const regenerateTokenBtn = document.getElementById('regenerateTokenBtn');
+    const downloadConfigBtn = document.getElementById('downloadConfigBtn');
     const tabTitleEl = document.getElementById('tabTitle');
     const extractBtn = document.getElementById('extractBtn');
     const clearBtn = document.getElementById('clearBtn');
@@ -35,6 +36,7 @@ function initializePopup() {
     // Set up event listeners
     copyTokenBtn.addEventListener('click', () => copyAccessToken());
     regenerateTokenBtn.addEventListener('click', () => regenerateAccessToken());
+    downloadConfigBtn.addEventListener('click', () => downloadConfigFile());
     extractBtn.addEventListener('click', () => extractCurrentTab(statusEl, contentAreaEl, extractBtn));
     clearBtn.addEventListener('click', () => clearContent(contentAreaEl));
     consoleHeaderEl.addEventListener('click', (e) => {
@@ -92,6 +94,63 @@ function initializePopup() {
                 showStatus(statusEl, 'error', 'Failed to regenerate token');
             }
         });
+    }
+
+    /**
+     * Download configuration file for HTTP server
+     */
+    function downloadConfigFile() {
+        const token = accessTokenEl.textContent;
+
+        if (!token || token === 'Loading...' || token === 'Error loading token') {
+            showStatus(statusEl, 'error', 'No valid token available');
+            return;
+        }
+
+        // Detect platform for appropriate instructions
+        const platform = navigator.platform.toLowerCase();
+        let configPath = '';
+        if (platform.includes('win')) {
+            configPath = '%APPDATA%\\chrome-tab-reader\\tokens.json';
+        } else if (platform.includes('mac')) {
+            configPath = '~/Library/Application Support/chrome-tab-reader/tokens.json';
+        } else {
+            configPath = '~/.config/chrome-tab-reader/tokens.json';
+        }
+
+        // Create config file content
+        const config = {
+            tokens: [token],
+            note: "Chrome Tab Reader access token. Get new tokens from the extension popup.",
+            instructions: [
+                "1. Save this file to: " + configPath,
+                "2. You can add multiple tokens to the 'tokens' array",
+                "3. Restart your HTTP server after making changes"
+            ],
+            platform_specific_paths: {
+                linux: "~/.config/chrome-tab-reader/tokens.json",
+                macos: "~/Library/Application Support/chrome-tab-reader/tokens.json",
+                windows: "%APPDATA%\\chrome-tab-reader\\tokens.json"
+            }
+        };
+
+        const configJSON = JSON.stringify(config, null, 2);
+        const blob = new Blob([configJSON], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        // Create download link and trigger download
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'tokens.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showStatus(statusEl, 'success', 'Config file downloaded! Save to: ' + configPath);
+        setTimeout(() => {
+            statusEl.className = 'status';
+        }, 5000);
     }
 
     /**

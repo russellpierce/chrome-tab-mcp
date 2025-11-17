@@ -26,6 +26,7 @@ import platform
 import subprocess
 import threading
 import time
+import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
@@ -39,8 +40,37 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def get_config_dir() -> Path:
+    """Get platform-specific config directory following XDG and OS standards.
+
+    Returns:
+        Path: Config directory for chrome-tab-reader
+            - Linux: ~/.config/chrome-tab-reader (XDG_CONFIG_HOME)
+            - macOS: ~/Library/Application Support/chrome-tab-reader
+            - Windows: %APPDATA%\\chrome-tab-reader
+    """
+    system = platform.system()
+
+    if system == "Windows":
+        # Windows: Use APPDATA
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        return base / "chrome-tab-reader"
+    elif system == "Darwin":
+        # macOS: Use ~/Library/Application Support
+        return Path.home() / "Library" / "Application Support" / "chrome-tab-reader"
+    else:
+        # Linux and others: Use XDG_CONFIG_HOME or ~/.config
+        xdg_config = os.environ.get("XDG_CONFIG_HOME")
+        if xdg_config:
+            base = Path(xdg_config)
+        else:
+            base = Path.home() / ".config"
+        return base / "chrome-tab-reader"
+
+
 # Token configuration
-CONFIG_DIR = Path.home() / ".chrome-tab-reader"
+CONFIG_DIR = get_config_dir()
 TOKENS_FILE = CONFIG_DIR / "tokens.json"
 
 def load_valid_tokens() -> Set[str]:
@@ -182,7 +212,7 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
         """Send 401 Unauthorized response"""
         response = {
             "error": "Unauthorized",
-            "message": "Valid Bearer token required. Configure tokens in ~/.chrome-tab-reader/tokens.json"
+            "message": f"Valid Bearer token required. Configure tokens in {TOKENS_FILE}"
         }
         self.send_json_response(401, response)
 
@@ -279,18 +309,25 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
 
     def send_api_docs(self):
         """Send API documentation"""
-        docs = """
+        # Get platform-specific config path for display
+        config_path_display = str(TOKENS_FILE)
+
+        docs = f"""
 <!DOCTYPE html>
 <html>
 <head>
     <title>Chrome Tab Reader API</title>
     <style>
-        body { font-family: monospace; max-width: 800px; margin: 40px; }
-        h1 { color: #333; }
-        .auth-notice { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px; }
-        .endpoint { background: #f5f5f5; padding: 10px; margin: 10px 0; border-left: 3px solid #007bff; }
-        .method { font-weight: bold; color: #007bff; }
-        pre { background: #f9f9f9; padding: 10px; overflow-x: auto; }
+        body {{ font-family: monospace; max-width: 900px; margin: 40px; line-height: 1.6; }}
+        h1 {{ color: #333; }}
+        h2 {{ color: #555; margin-top: 30px; }}
+        .auth-notice {{ background: #fff3cd; border: 1px solid #ffc107; padding: 15px; margin: 15px 0; border-radius: 4px; }}
+        .config-info {{ background: #d1ecf1; border: 1px solid #0c5460; padding: 15px; margin: 15px 0; border-radius: 4px; }}
+        .endpoint {{ background: #f5f5f5; padding: 10px; margin: 10px 0; border-left: 3px solid #007bff; }}
+        .method {{ font-weight: bold; color: #007bff; }}
+        pre {{ background: #f9f9f9; padding: 10px; overflow-x: auto; border: 1px solid #ddd; border-radius: 3px; }}
+        code {{ background: #f0f0f0; padding: 2px 6px; border-radius: 3px; }}
+        .platform-path {{ font-weight: bold; color: #0056b3; }}
     </style>
 </head>
 <body>
@@ -298,11 +335,20 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
 
     <p>Base URL: http://localhost:8888</p>
 
+    <div class="config-info">
+        <strong>Configuration File Location</strong><br>
+        Your tokens file is located at:<br>
+        <code class="platform-path">{config_path_display}</code><br><br>
+        <strong>Platform-specific paths:</strong><br>
+        • Linux: <code>~/.config/chrome-tab-reader/tokens.json</code><br>
+        • macOS: <code>~/Library/Application Support/chrome-tab-reader/tokens.json</code><br>
+        • Windows: <code>%APPDATA%\\chrome-tab-reader\\tokens.json</code>
+    </div>
+
     <div class="auth-notice">
         <strong>Authentication Required</strong><br>
         All API endpoints (except this documentation page) require Bearer token authentication.<br>
-        Get your token from the Chrome extension popup, then add it to:<br>
-        <code>~/.chrome-tab-reader/tokens.json</code>
+        Get your token from the Chrome extension popup, then add it to the configuration file shown above.
     </div>
 
     <h2>Endpoints</h2>
@@ -372,14 +418,26 @@ Response: (same as extract)</pre>
     <ol>
         <li>Install the Chrome Tab Reader extension</li>
         <li>Open the extension popup and copy your access token</li>
-        <li>Add the token to ~/.chrome-tab-reader/tokens.json:
-            <pre>{
+        <li>Create the tokens configuration file at:<br>
+            <code>{config_path_display}</code>
+            <pre>{{
   "tokens": ["your-token-here"],
-  "note": "Get token from extension popup"
-}</pre>
+  "note": "Get token from extension popup. You can add multiple tokens."
+}}</pre>
         </li>
         <li>Start this server and include the token in all API requests</li>
     </ol>
+
+    <h2>Token File Structure</h2>
+    <p>The tokens.json file should contain:</p>
+    <pre>{{
+  "tokens": [
+    "64-char-hex-token-from-extension-1",
+    "64-char-hex-token-from-extension-2"
+  ],
+  "note": "Optional: Add notes or descriptions here"
+}}</pre>
+    <p><strong>TIP:</strong> Use the "Download Config File" button in the extension popup to automatically generate this file!</p>
 
 </body>
 </html>
