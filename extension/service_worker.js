@@ -52,12 +52,93 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 /**
+ * Check if a URL can have content scripts injected
+ */
+function canInjectContentScript(url) {
+    if (!url) return false;
+
+    const restrictedProtocols = ['chrome:', 'chrome-extension:', 'about:', 'edge:', 'browser:'];
+    const restrictedPages = ['chrome://newtab/', 'chrome://extensions/', 'about:blank'];
+
+    // Check if URL starts with restricted protocol
+    for (const protocol of restrictedProtocols) {
+        if (url.startsWith(protocol)) {
+            return false;
+        }
+    }
+
+    // Check if URL is a restricted page
+    for (const page of restrictedPages) {
+        if (url.startsWith(page)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Ensure content script is injected in the tab
+ */
+async function ensureContentScriptInjected(tabId) {
+    try {
+        // Try to ping the content script
+        const response = await chrome.tabs.sendMessage(tabId, { action: "getPageInfo" });
+        console.log("[Chrome Tab Reader] Content script already loaded");
+        return true;
+    } catch (error) {
+        // Content script not loaded, try to inject it
+        console.log("[Chrome Tab Reader] Content script not detected, attempting injection");
+
+        try {
+            // Inject the libraries first
+            await chrome.scripting.executeScript({
+                target: { tabId: tabId },
+                files: ['lib/readability.min.js', 'lib/dompurify.min.js', 'content_script.js']
+            });
+
+            console.log("[Chrome Tab Reader] Content script injected successfully");
+
+            // Wait a moment for the script to initialize
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            return true;
+        } catch (injectError) {
+            console.error("[Chrome Tab Reader] Failed to inject content script:", injectError);
+            return false;
+        }
+    }
+}
+
+/**
  * Extract content from a specific tab
  */
 async function extractFromTab(tabId, strategy = "three-phase") {
     console.log(`[Chrome Tab Reader] Extracting from tab ${tabId} with strategy: ${strategy}`);
 
     try {
+        // Get tab info to check URL
+        const tab = await chrome.tabs.get(tabId);
+
+        // Check if we can inject content scripts on this page
+        if (!canInjectContentScript(tab.url)) {
+            console.warn(`[Chrome Tab Reader] Cannot extract from restricted page: ${tab.url}`);
+            return {
+                status: "error",
+                error: `Cannot extract content from this type of page (${new URL(tab.url).protocol}). Please navigate to a regular webpage.`
+            };
+        }
+
+        // Ensure content script is injected
+        const injected = await ensureContentScriptInjected(tabId);
+        if (!injected) {
+            return {
+                status: "error",
+                error: "Failed to inject content script. Please try refreshing the page."
+            };
+        }
+
+        // Send extraction request to content script
         const response = await chrome.tabs.sendMessage(tabId, {
             action: "extractContent",
             strategy: strategy
