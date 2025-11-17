@@ -39,15 +39,214 @@ import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from pathlib import Path
-from typing import Dict, Any, Set
+from typing import Dict, Any, Set, Callable, Optional
 import logging
+from functools import wraps
 
-# Set up logging
+# Set up logging first
 logging.basicConfig(
     level=logging.INFO,
     format='[Chrome Tab Reader] %(levelname)s: %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# OpenAPI spec generation
+try:
+    from apispec import APISpec
+    APISPEC_AVAILABLE = True
+except ImportError:
+    APISPEC_AVAILABLE = False
+    logger.warning("apispec not available. OpenAPI spec generation will be disabled.")
+
+
+# ============================================================================
+# OpenAPI Specification Generation
+# ============================================================================
+
+# Initialize APISpec if available
+if APISPEC_AVAILABLE:
+    spec = APISpec(
+        title="Chrome Tab Reader API",
+        version="1.0.0",
+        openapi_version="3.0.3",
+        info={
+            "description": "HTTP API for extracting content from Chrome tabs. "
+                          "Supports both AppleScript (macOS) and Chrome extension-based extraction.",
+            "contact": {
+                "name": "Chrome Tab Reader",
+                "url": "https://github.com/russellpierce/chrome-tab-mcp"
+            }
+        },
+        servers=[
+            {"url": "http://localhost:8888", "description": "Local development server"}
+        ],
+        # Security scheme for Bearer token authentication
+        components={
+            "securitySchemes": {
+                "BearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "description": "Bearer token authentication. Get your token from the Chrome extension popup."
+                }
+            }
+        }
+    )
+else:
+    spec = None
+
+
+# Endpoint metadata storage for OpenAPI spec generation
+_endpoint_metadata = {}
+
+
+def openapi_endpoint(
+    method: str,
+    path: str,
+    summary: str,
+    description: str = "",
+    request_schema: Optional[Dict[str, Any]] = None,
+    response_schema: Optional[Dict[str, Any]] = None,
+    error_responses: Optional[Dict[int, str]] = None,
+    requires_auth: bool = True,
+    tags: Optional[list] = None
+):
+    """
+    Decorator to add OpenAPI metadata to endpoint handlers.
+
+    Args:
+        method: HTTP method (GET, POST, etc.)
+        path: API endpoint path
+        summary: Short summary of what the endpoint does
+        description: Detailed description of the endpoint
+        request_schema: JSON schema for request body (for POST/PUT)
+        response_schema: JSON schema for successful response
+        error_responses: Dict mapping status codes to error descriptions
+        requires_auth: Whether the endpoint requires Bearer token authentication
+        tags: List of tags for grouping endpoints
+
+    Example:
+        @openapi_endpoint(
+            method="GET",
+            path="/api/health",
+            summary="Health check endpoint",
+            response_schema={"type": "object", "properties": {...}},
+            requires_auth=True
+        )
+        def handle_health(self):
+            ...
+    """
+    def decorator(func: Callable) -> Callable:
+        # Store metadata for later spec generation
+        endpoint_key = f"{method}:{path}"
+        _endpoint_metadata[endpoint_key] = {
+            "method": method.lower(),
+            "path": path,
+            "summary": summary,
+            "description": description,
+            "request_schema": request_schema,
+            "response_schema": response_schema,
+            "error_responses": error_responses or {},
+            "requires_auth": requires_auth,
+            "tags": tags or ["API"]
+        }
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        return wrapper
+    return decorator
+
+
+def build_openapi_spec() -> Dict[str, Any]:
+    """
+    Build the OpenAPI specification from decorated endpoints.
+
+    Returns:
+        Dict containing the complete OpenAPI 3.0 specification
+    """
+    if not APISPEC_AVAILABLE or spec is None:
+        return {
+            "openapi": "3.0.3",
+            "info": {
+                "title": "Chrome Tab Reader API",
+                "version": "1.0.0",
+                "description": "OpenAPI spec generation unavailable (apispec not installed)"
+            },
+            "paths": {}
+        }
+
+    # Clear existing paths
+    spec._paths = {}
+
+    # Add each endpoint to the spec
+    for endpoint_key, metadata in _endpoint_metadata.items():
+        method = metadata["method"]
+        path = metadata["path"]
+
+        # Build operation object
+        operation = {
+            "summary": metadata["summary"],
+            "description": metadata["description"],
+            "tags": metadata["tags"],
+        }
+
+        # Add security requirement if needed
+        if metadata["requires_auth"]:
+            operation["security"] = [{"BearerAuth": []}]
+
+        # Add request body if present
+        if metadata["request_schema"]:
+            operation["requestBody"] = {
+                "required": True,
+                "content": {
+                    "application/json": {
+                        "schema": metadata["request_schema"]
+                    }
+                }
+            }
+
+        # Add responses
+        responses = {}
+
+        # Success response
+        if metadata["response_schema"]:
+            responses["200"] = {
+                "description": "Successful response",
+                "content": {
+                    "application/json": {
+                        "schema": metadata["response_schema"]
+                    }
+                }
+            }
+
+        # Error responses
+        if metadata["requires_auth"]:
+            responses["401"] = {
+                "description": "Unauthorized - Invalid or missing Bearer token",
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "error": {"type": "string"},
+                                "message": {"type": "string"}
+                            }
+                        }
+                    }
+                }
+            }
+
+        # Add custom error responses
+        for status_code, description in metadata.get("error_responses", {}).items():
+            responses[str(status_code)] = {"description": description}
+
+        operation["responses"] = responses
+
+        # Add operation to spec
+        spec.path(path=path, operations={method: operation})
+
+    return spec.to_dict()
 
 
 def get_config_dir() -> Path:
@@ -265,6 +464,8 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
             self.handle_current_tab()
         elif path == "/api/health":
             self.handle_health()
+        elif path == "/api/openapi.json":
+            self.handle_openapi_spec()
         else:
             self.send_json_response(404, {"error": "Not found"})
 
@@ -298,6 +499,44 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
         else:
             self.send_json_response(404, {"error": "Not found"})
 
+    @openapi_endpoint(
+        method="POST",
+        path="/api/extract",
+        summary="Extract content from current Chrome tab",
+        description="Extracts text content from the currently active Chrome tab using the configured extraction strategy.",
+        request_schema={
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["extract_current_tab"],
+                    "default": "extract_current_tab",
+                    "description": "Action to perform"
+                },
+                "strategy": {
+                    "type": "string",
+                    "enum": ["three-phase", "immediate"],
+                    "default": "three-phase",
+                    "description": "Extraction strategy: 'three-phase' waits for lazy-loaded content, 'immediate' extracts right away"
+                }
+            }
+        },
+        response_schema={
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["success", "error"]},
+                "content": {"type": "string", "description": "Extracted text content"},
+                "title": {"type": "string", "description": "Page title"},
+                "url": {"type": "string", "description": "Page URL"},
+                "extraction_time_ms": {"type": "number", "description": "Time taken for extraction in milliseconds"}
+            },
+            "required": ["status"]
+        },
+        error_responses={
+            500: "Internal server error during extraction"
+        },
+        tags=["Content Extraction"]
+    )
     def handle_extract(self, request_data: Dict):
         """Handle /api/extract endpoint"""
         strategy = request_data.get("strategy", "three-phase")
@@ -306,6 +545,55 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
         result = ChromeTabExtractor.extract_current_tab()
         self.send_json_response(200 if result.get("status") == "success" else 500, result)
 
+    @openapi_endpoint(
+        method="POST",
+        path="/api/navigate_and_extract",
+        summary="Navigate to URL and extract content",
+        description="Navigate Chrome to a specific URL and extract its content. Currently not implemented - returns error.",
+        request_schema={
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "default": "navigate_and_extract",
+                    "description": "Action to perform"
+                },
+                "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL to navigate to"
+                },
+                "strategy": {
+                    "type": "string",
+                    "enum": ["three-phase", "immediate"],
+                    "default": "three-phase",
+                    "description": "Extraction strategy"
+                },
+                "wait_for_ms": {
+                    "type": "integer",
+                    "default": 0,
+                    "description": "Additional milliseconds to wait before extraction"
+                }
+            },
+            "required": ["url"]
+        },
+        response_schema={
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["success", "error"]},
+                "content": {"type": "string", "description": "Extracted text content"},
+                "title": {"type": "string", "description": "Page title"},
+                "url": {"type": "string", "description": "Page URL"},
+                "extraction_time_ms": {"type": "number", "description": "Time taken for extraction in milliseconds"}
+            },
+            "required": ["status"]
+        },
+        error_responses={
+            400: "Bad request - missing required URL parameter",
+            500: "Not yet implemented or internal server error"
+        },
+        tags=["Content Extraction"]
+    )
     def handle_navigate_and_extract(self, request_data: Dict):
         """Handle /api/navigate_and_extract endpoint"""
         url = request_data.get("url")
@@ -319,11 +607,47 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
         result = ChromeTabExtractor.navigate_and_extract(url, wait_for_ms)
         self.send_json_response(200 if result.get("status") == "success" else 500, result)
 
+    @openapi_endpoint(
+        method="GET",
+        path="/api/current_tab",
+        summary="Get current tab information",
+        description="Retrieve information about the currently active Chrome tab without extracting its content.",
+        response_schema={
+            "type": "object",
+            "properties": {
+                "tab_id": {"type": "string", "description": "Tab identifier (may be 'unknown' on some platforms)"},
+                "url": {"type": "string", "format": "uri", "description": "Current tab URL"},
+                "title": {"type": "string", "description": "Current tab title"},
+                "is_loading": {"type": "boolean", "description": "Whether the page is currently loading"}
+            }
+        },
+        error_responses={
+            500: "Tab information unavailable"
+        },
+        tags=["Tab Information"]
+    )
     def handle_current_tab(self):
         """Handle /api/current_tab endpoint"""
         result = ChromeTabExtractor.get_current_tab_info()
         self.send_json_response(200 if result.get("status") != "error" else 500, result)
 
+    @openapi_endpoint(
+        method="GET",
+        path="/api/health",
+        summary="Health check endpoint",
+        description="Check if the API server is running and responsive.",
+        response_schema={
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["ok"], "description": "Server status"},
+                "extension_version": {"type": "string", "description": "Extension version"},
+                "port": {"type": "integer", "description": "Server port number"},
+                "platform": {"type": "string", "description": "Operating system platform"}
+            },
+            "required": ["status"]
+        },
+        tags=["System"]
+    )
     def handle_health(self):
         """Handle /api/health endpoint"""
         response = {
@@ -333,6 +657,12 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
             "platform": platform.system()
         }
         self.send_json_response(200, response)
+
+    def handle_openapi_spec(self):
+        """Handle /api/openapi.json endpoint - serve OpenAPI specification"""
+        logger.info("Serving OpenAPI specification")
+        spec_dict = build_openapi_spec()
+        self.send_json_response(200, spec_dict)
 
     def send_api_docs(self):
         """Send API documentation"""
@@ -363,6 +693,12 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
     <p>Base URL: http://localhost:8888</p>
 
     <div class="config-info">
+        <strong>📋 OpenAPI Specification</strong><br>
+        Machine-readable API specification available at: <a href="/api/openapi.json" target="_blank"><code>/api/openapi.json</code></a><br>
+        Use with tools like <a href="https://editor.swagger.io/" target="_blank">Swagger Editor</a> or <a href="https://www.postman.com/" target="_blank">Postman</a> for interactive API exploration.
+    </div>
+
+    <div class="config-info">
         <strong>Configuration File Location</strong><br>
         Your tokens file is located at:<br>
         <code class="platform-path">{config_path_display}</code><br><br>
@@ -380,6 +716,13 @@ class ChromeTabHTTPHandler(BaseHTTPRequestHandler):
     </div>
 
     <h2>Endpoints</h2>
+
+    <div class="endpoint">
+        <div class="method">GET /api/openapi.json</div>
+        <p>Get OpenAPI 3.0 specification (requires authentication)</p>
+        <pre>Returns the complete OpenAPI specification in JSON format.
+Can be imported into API testing tools like Postman, Insomnia, or Swagger UI.</pre>
+    </div>
 
     <div class="endpoint">
         <div class="method">GET /api/health</div>

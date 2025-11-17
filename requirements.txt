@@ -5,6 +5,10 @@
 # If not installed, will fall back to manual implementation
 platformdirs>=4.0.0
 
+# OpenAPI specification generation from code decorators
+# Used to automatically generate API documentation
+apispec>=6.0.0
+
 # Note: The HTTP server (chrome_tab_http_server.py) will work without
 # platformdirs, but installing it is recommended for better compliance
 # with system standards.
