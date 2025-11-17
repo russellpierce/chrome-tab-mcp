@@ -14,6 +14,11 @@ Protocol:
 - Native Messaging: 4-byte length prefix (little-endian) + JSON message
 - TCP: JSON messages terminated by newline
 
+Authentication (Optional):
+- When --require-auth is enabled, TCP clients must send "AUTH <token>" as first line
+- Tokens are loaded from platform-specific config directory (same as HTTP server)
+- Extension does not need auth (it connects via stdin/stdout, already trusted)
+
 Reference: https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging
 """
 
@@ -25,6 +30,8 @@ import socket
 import threading
 import os
 import time
+import argparse
+import platform
 from pathlib import Path
 
 # Configuration
@@ -33,6 +40,10 @@ TCP_PORT = 8765  # Port for MCP server to connect to
 LOG_DIR = Path.home() / ".chrome-tab-reader"
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / "native_host.log"
+
+# Authentication configuration (populated by command-line args)
+REQUIRE_AUTH = False
+VALID_TOKENS = set()
 
 # Set up logging
 logging.basicConfig(
@@ -111,6 +122,87 @@ def send_message(message):
         logger.error(f"Error sending message: {e}", exc_info=True)
 
 
+def get_config_dir() -> Path:
+    """Get platform-specific config directory (same as HTTP server)."""
+    try:
+        import platformdirs
+        return Path(platformdirs.user_config_dir("chrome-tab-reader", appauthor=False))
+    except ImportError:
+        system = platform.system()
+        if system == "Windows":
+            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+            return base / "chrome-tab-reader"
+        elif system == "Darwin":
+            return Path.home() / "Library" / "Application Support" / "chrome-tab-reader"
+        else:
+            # Linux: XDG Base Directory Specification
+            xdg_config = os.environ.get("XDG_CONFIG_HOME")
+            if xdg_config:
+                base = Path(xdg_config)
+            else:
+                base = Path.home() / ".config"
+            return base / "chrome-tab-reader"
+
+
+def load_valid_tokens() -> set:
+    """Load valid tokens from config file."""
+    config_dir = get_config_dir()
+    tokens_file = config_dir / "tokens.json"
+
+    if not tokens_file.exists():
+        logger.warning(f"Tokens file not found at {tokens_file}")
+        return set()
+
+    try:
+        with open(tokens_file, 'r') as f:
+            data = json.load(f)
+            tokens = data.get("tokens", [])
+            logger.info(f"Loaded {len(tokens)} valid token(s) from {tokens_file}")
+            return set(tokens)
+    except Exception as e:
+        logger.error(f"Error loading tokens file: {e}")
+        return set()
+
+
+def authenticate_tcp_client(client_socket) -> bool:
+    """
+    Authenticate TCP client by reading AUTH line.
+
+    Returns:
+        bool: True if authenticated (or auth not required), False otherwise
+    """
+    if not REQUIRE_AUTH:
+        return True
+
+    try:
+        # Read first line (auth line)
+        auth_line = b''
+        while True:
+            chunk = client_socket.recv(1)
+            if not chunk or chunk == b'\n':
+                break
+            auth_line += chunk
+
+        auth_str = auth_line.decode('utf-8').strip()
+
+        if not auth_str.startswith('AUTH '):
+            logger.warning("TCP client did not send AUTH line")
+            return False
+
+        token = auth_str[5:]  # Remove "AUTH " prefix
+
+        if token in VALID_TOKENS:
+            logger.info("TCP client authenticated successfully")
+            return True
+        else:
+            logger.warning("TCP client sent invalid token")
+            return False
+
+    except Exception as e:
+        logger.error(f"Error during authentication: {e}", exc_info=True)
+        return False
+
+
 def handle_mcp_client(client_socket):
     """
     Handle a connection from the MCP server.
@@ -121,6 +213,15 @@ def handle_mcp_client(client_socket):
     global request_counter, extension_connected
 
     try:
+        # Authenticate client if required
+        if not authenticate_tcp_client(client_socket):
+            error_response = {
+                "status": "error",
+                "error": "Authentication required. Send 'AUTH <token>' as first line."
+            }
+            client_socket.sendall((json.dumps(error_response) + '\n').encode('utf-8'))
+            return
+
         # Read request from MCP server (newline-delimited JSON)
         data = b''
         while True:
@@ -271,11 +372,36 @@ def main():
     """
     Main entry point: Start TCP server and extension message loop.
     """
+    global REQUIRE_AUTH, VALID_TOKENS
+
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description="Chrome Tab Reader - Native Messaging Host",
+        epilog="Bridges communication between Chrome extension and MCP server via TCP"
+    )
+    parser.add_argument(
+        "--require-auth",
+        action="store_true",
+        help="Require authentication for TCP connections (default: disabled for backward compatibility)"
+    )
+    args = parser.parse_args()
+
+    REQUIRE_AUTH = args.require_auth
+
     logger.info("=== Native Messaging Host Starting ===")
     logger.info(f"Python version: {sys.version}")
     logger.info(f"PID: {os.getpid()}")
     logger.info(f"TCP: {TCP_HOST}:{TCP_PORT}")
+    logger.info(f"Authentication: {'REQUIRED' if REQUIRE_AUTH else 'DISABLED'}")
     logger.info(f"Log file: {LOG_FILE}")
+
+    # Load tokens if authentication is required
+    if REQUIRE_AUTH:
+        VALID_TOKENS = load_valid_tokens()
+        if not VALID_TOKENS:
+            logger.error("Authentication is required but no tokens are configured!")
+            logger.error("Please add tokens to tokens.json or disable authentication")
+            sys.exit(1)
 
     try:
         # Start TCP server in background thread

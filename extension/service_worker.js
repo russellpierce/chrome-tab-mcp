@@ -208,6 +208,38 @@ chrome.runtime.onInstalled.addListener(async () => {
 connectToNativeHost();
 
 /**
+ * Validate URL for navigation safety
+ * Allows http/https URLs including private IPs
+ * Blocks dangerous schemes like javascript:, file:, data:
+ */
+function validateNavigationURL(url) {
+    if (!url) {
+        return { valid: false, error: "URL is required" };
+    }
+
+    try {
+        const parsed = new URL(url);
+
+        // Only allow http and https protocols
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            return {
+                valid: false,
+                error: `Invalid URL scheme: ${parsed.protocol}. Only http: and https: are allowed.`
+            };
+        }
+
+        // Allow all hostnames including private IPs (user's design decision)
+        return { valid: true };
+
+    } catch (e) {
+        return {
+            valid: false,
+            error: `Invalid URL format: ${e.message}`
+        };
+    }
+}
+
+/**
  * Check if a URL can have content scripts injected
  */
 function canInjectContentScript(url) {
@@ -344,6 +376,16 @@ async function extractCurrentTab(strategy = "three-phase") {
  */
 async function navigateAndExtract(url, strategy = "three-phase", waitForMs = 0) {
     console.log(`[Chrome Tab Reader] Navigating to ${url} and extracting`);
+
+    // Validate URL before navigation
+    const validation = validateNavigationURL(url);
+    if (!validation.valid) {
+        console.error(`[Chrome Tab Reader] URL validation failed: ${validation.error}`);
+        return {
+            status: "error",
+            error: validation.error
+        };
+    }
 
     try {
         // Get the current active tab
