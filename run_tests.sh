@@ -35,13 +35,21 @@ TEST_TYPE="${1:-all}"
 case "$TEST_TYPE" in
     unit)
         echo -e "${GREEN}Running unit tests...${NC}"
-        pytest tests/test_native_messaging.py -v -m "not integration and not e2e"
+        echo ""
+        echo -e "${BLUE}→ Native Messaging Protocol Tests${NC}"
+        uv run pytest tests/test_native_messaging.py -v -m "not integration and not e2e"
+        echo ""
+        echo -e "${BLUE}→ HTTP Server Tests${NC}"
+        uv run pytest tests/test_http_server.py -v
+        echo ""
+        echo -e "${BLUE}→ FastAPI Schema Validation${NC}"
+        uv run python test_fastapi_server.py
         ;;
 
     integration)
         echo -e "${GREEN}Running integration tests...${NC}"
         echo -e "${YELLOW}Note: These tests require the native host to be running${NC}"
-        pytest tests/test_native_messaging.py -v -m integration
+        uv run pytest tests/test_native_messaging.py -v -m integration
         ;;
 
     e2e)
@@ -51,12 +59,12 @@ case "$TEST_TYPE" in
         echo "Prerequisites:"
         echo "  1. Extension loaded in Chrome (chrome://extensions/)"
         echo "  2. Native messaging host installed"
-        echo "  3. Playwright installed (pip install playwright && playwright install chrome)"
+        echo "  3. Playwright installed (uv pip install playwright && uv run playwright install chrome)"
         echo ""
         read -p "Continue? (y/n) " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            pytest tests/test_e2e_native_messaging.py -v -m e2e -s
+            uv run pytest tests/test_e2e_native_messaging.py -v -m e2e -s
         else
             echo "Cancelled"
             exit 0
@@ -67,12 +75,12 @@ case "$TEST_TYPE" in
         echo -e "${GREEN}Running manual interactive tests...${NC}"
         echo -e "${YELLOW}This will test the actual connection to Chrome${NC}"
         echo ""
-        python tests/manual_test_native_messaging.py all
+        uv run python tests/manual_test_native_messaging.py all
         ;;
 
     coverage)
         echo -e "${GREEN}Running tests with coverage...${NC}"
-        pytest tests/ -v --cov=. --cov-report=html --cov-report=term
+        uv run pytest tests/ -v --cov=. --cov-report=html --cov-report=term
         echo ""
         echo -e "${GREEN}Coverage report generated: htmlcov/index.html${NC}"
         ;;
@@ -81,12 +89,20 @@ case "$TEST_TYPE" in
         echo -e "${GREEN}Running all tests...${NC}"
         echo ""
 
-        echo -e "${BLUE}1. Unit Tests${NC}"
-        pytest tests/test_native_messaging.py -v -m "not integration and not e2e" || true
+        echo -e "${BLUE}1. FastAPI Schema Validation${NC}"
+        uv run python test_fastapi_server.py || true
         echo ""
 
-        echo -e "${BLUE}2. Manual Test (Quick Check)${NC}"
-        python tests/manual_test_native_messaging.py protocol || true
+        echo -e "${BLUE}2. Unit Tests - Native Messaging${NC}"
+        uv run pytest tests/test_native_messaging.py -v -m "not integration and not e2e" || true
+        echo ""
+
+        echo -e "${BLUE}3. Unit Tests - HTTP Server${NC}"
+        uv run pytest tests/test_http_server.py -v || true
+        echo ""
+
+        echo -e "${BLUE}4. Manual Test (Quick Check)${NC}"
+        uv run python tests/manual_test_native_messaging.py protocol || true
         echo ""
 
         echo -e "${YELLOW}Skipping integration and E2E tests (run with: ./run_tests.sh e2e)${NC}"
@@ -107,7 +123,7 @@ case "$TEST_TYPE" in
         echo "Usage: $0 [test_type]"
         echo ""
         echo "Test types:"
-        echo "  unit         - Run unit tests (fast, no Chrome needed)"
+        echo "  unit         - Run unit tests (FastAPI schema, HTTP server, native messaging)"
         echo "  integration  - Run integration tests (requires native host)"
         echo "  e2e          - Run end-to-end tests (requires Chrome + extension)"
         echo "  manual       - Run manual interactive test"
@@ -118,9 +134,11 @@ case "$TEST_TYPE" in
         echo ""
         echo "Examples:"
         echo "  $0              # Run all tests"
-        echo "  $0 unit         # Quick unit tests"
+        echo "  $0 unit         # Quick unit tests (no Chrome needed)"
         echo "  $0 manual       # Test actual Chrome connection"
         echo "  $0 e2e          # Full end-to-end test"
+        echo ""
+        echo "Note: All tests use 'uv run' to ensure consistent Python environment"
         ;;
 
     *)
