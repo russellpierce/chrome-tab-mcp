@@ -10,10 +10,6 @@ function initializePopup() {
     console.log('[Chrome Tab Reader] Initializing popup');
 
     // Get references to UI elements
-    const accessTokenEl = document.getElementById('accessToken');
-    const copyTokenBtn = document.getElementById('copyTokenBtn');
-    const regenerateTokenBtn = document.getElementById('regenerateTokenBtn');
-    const downloadConfigBtn = document.getElementById('downloadConfigBtn');
     const tabTitleEl = document.getElementById('tabTitle');
     const extractBtn = document.getElementById('extractBtn');
     const clearBtn = document.getElementById('clearBtn');
@@ -24,9 +20,6 @@ function initializePopup() {
     const consoleToggleEl = document.getElementById('consoleToggle');
     const consoleClearBtn = document.getElementById('consoleClearBtn');
 
-    // Load and display access token
-    loadAccessToken();
-
     // Update tab title on load
     updateTabTitle();
 
@@ -34,9 +27,6 @@ function initializePopup() {
     initializeConsole();
 
     // Set up event listeners
-    copyTokenBtn.addEventListener('click', () => copyAccessToken());
-    regenerateTokenBtn.addEventListener('click', () => regenerateAccessToken());
-    downloadConfigBtn.addEventListener('click', () => downloadConfigFile());
     extractBtn.addEventListener('click', () => extractCurrentTab(statusEl, contentAreaEl, extractBtn));
     clearBtn.addEventListener('click', () => clearContent(contentAreaEl));
     consoleHeaderEl.addEventListener('click', (e) => {
@@ -49,142 +39,6 @@ function initializePopup() {
         e.stopPropagation();
         clearConsole();
     });
-
-    /**
-     * Load and display access token
-     */
-    function loadAccessToken() {
-        chrome.runtime.sendMessage({ action: 'get_access_token' }, (token) => {
-            if (token && !token.error) {
-                accessTokenEl.textContent = token;
-            } else {
-                accessTokenEl.textContent = 'Error loading token';
-            }
-        });
-    }
-
-    /**
-     * Copy access token to clipboard as complete JSON config
-     */
-    function copyAccessToken() {
-        const token = accessTokenEl.textContent;
-
-        if (!token || token === 'Loading...' || token === 'Error loading token') {
-            showStatus(statusEl, 'error', 'No valid token available');
-            return;
-        }
-
-        // Detect platform for appropriate file path
-        const platform = navigator.platform.toLowerCase();
-        let configPath = '';
-        if (platform.includes('win')) {
-            configPath = '%APPDATA%\\chrome-tab-reader\\tokens.json';
-        } else if (platform.includes('mac')) {
-            configPath = '~/Library/Application Support/chrome-tab-reader/tokens.json';
-        } else {
-            // Linux: Follow XDG Base Directory Specification
-            configPath = '$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json or ~/.config/chrome-tab-reader/tokens.json';
-        }
-
-        // Create complete JSON config ready to save
-        const config = {
-            tokens: [token],
-            note: "Chrome Tab Reader access token. Get new tokens from the extension popup.",
-            instructions: [
-                "1. Save this file to: " + configPath,
-                "2. You can add multiple tokens to the 'tokens' array",
-                "3. Restart your HTTP server after making changes"
-            ]
-        };
-
-        const configJSON = JSON.stringify(config, null, 2);
-
-        navigator.clipboard.writeText(configJSON).then(() => {
-            showStatus(statusEl, 'success', `Config JSON copied! Save to: ${configPath}`);
-            setTimeout(() => {
-                statusEl.className = 'status';
-            }, 5000);
-        }).catch(err => {
-            showStatus(statusEl, 'error', 'Failed to copy to clipboard');
-        });
-    }
-
-    /**
-     * Regenerate access token
-     */
-    function regenerateAccessToken() {
-        if (!confirm('Regenerate access token? You will need to update it in your MCP server and scripts.')) {
-            return;
-        }
-
-        chrome.runtime.sendMessage({ action: 'regenerate_access_token' }, (token) => {
-            if (token && !token.error) {
-                accessTokenEl.textContent = token;
-                showStatus(statusEl, 'success', 'Token regenerated successfully');
-            } else {
-                showStatus(statusEl, 'error', 'Failed to regenerate token');
-            }
-        });
-    }
-
-    /**
-     * Download configuration file for HTTP server
-     */
-    function downloadConfigFile() {
-        const token = accessTokenEl.textContent;
-
-        if (!token || token === 'Loading...' || token === 'Error loading token') {
-            showStatus(statusEl, 'error', 'No valid token available');
-            return;
-        }
-
-        // Detect platform for appropriate instructions
-        const platform = navigator.platform.toLowerCase();
-        let configPath = '';
-        if (platform.includes('win')) {
-            configPath = '%APPDATA%\\chrome-tab-reader\\tokens.json';
-        } else if (platform.includes('mac')) {
-            configPath = '~/Library/Application Support/chrome-tab-reader/tokens.json';
-        } else {
-            // Linux: Follow XDG Base Directory Specification
-            configPath = '$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json or ~/.config/chrome-tab-reader/tokens.json';
-        }
-
-        // Create config file content
-        const config = {
-            tokens: [token],
-            note: "Chrome Tab Reader access token. Get new tokens from the extension popup.",
-            instructions: [
-                "1. Save this file to: " + configPath,
-                "2. You can add multiple tokens to the 'tokens' array",
-                "3. Restart your HTTP server after making changes"
-            ],
-            platform_specific_paths: {
-                linux: "$XDG_CONFIG_HOME/chrome-tab-reader/tokens.json (or ~/.config/chrome-tab-reader/tokens.json if XDG_CONFIG_HOME not set)",
-                linux_reference: "Linux follows XDG Base Directory Specification: https://specifications.freedesktop.org/basedir/latest/",
-                macos: "~/Library/Application Support/chrome-tab-reader/tokens.json",
-                windows: "%APPDATA%\\chrome-tab-reader\\tokens.json"
-            }
-        };
-
-        const configJSON = JSON.stringify(config, null, 2);
-        const blob = new Blob([configJSON], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        // Create download link and trigger download
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'tokens.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-
-        showStatus(statusEl, 'success', 'Config file downloaded! Save to: ' + configPath);
-        setTimeout(() => {
-            statusEl.className = 'status';
-        }, 5000);
-    }
 
     /**
      * Update the displayed tab title

@@ -1,12 +1,14 @@
 # Access Control Setup Guide
 
-The Chrome Tab Reader uses token-based authentication to secure communication between the extension and the HTTP server.
+> **⚠️ Important:** This guide is **only for the HTTP API server**. If you're using Native Messaging with the MCP server, **you do not need tokens** - Native Messaging uses Chrome's built-in manifest-based security instead.
+
+The Chrome Tab Reader HTTP API uses token-based authentication to secure communication between clients and the HTTP server.
 
 ## Overview
 
-- **Extension**: Generates and stores a unique access token
+- **Tokens**: Must be manually generated (cryptographically random)
 - **HTTP Server**: Validates tokens for all API requests
-- **Scripts/MCP**: Must include the token in API requests
+- **Scripts/MCP**: Must include the token in API requests when using HTTP API
 
 ## Security Model
 
@@ -18,22 +20,21 @@ The Chrome Tab Reader uses token-based authentication to secure communication be
 
 ## Setup Steps
 
-### 1. Install the Chrome Extension
+### 1. Generate an Access Token
 
-1. Navigate to `chrome://extensions/`
-2. Enable "Developer mode" (top right)
-3. Click "Load unpacked"
-4. Select the `extension` directory from this repository
-5. The extension icon will appear in your toolbar
+Since the extension no longer generates tokens, you need to create your own secure random token:
 
-### 2. Get Your Access Token
+```bash
+# Generate a 256-bit random token (Linux/macOS)
+python3 -c "import secrets; print(secrets.token_hex(32))"
 
-1. Click the Chrome Tab Reader extension icon
-2. The popup will display your unique access token at the top
-3. Click the "Copy" button to copy it to clipboard
-4. **Keep this token secure** - it's like a password
+# Or use openssl
+openssl rand -hex 32
+```
 
-### 3. Configure the HTTP Server
+**Keep this token secure** - it's like a password.
+
+### 2. Configure the HTTP Server
 
 Create the tokens configuration file:
 
@@ -56,7 +57,7 @@ cp tokens.json.example ~/.chrome-tab-reader/tokens.json
 # Then edit ~/.chrome-tab-reader/tokens.json and add your token
 ```
 
-### 4. Start the HTTP Server
+### 3. Start the HTTP Server
 
 ```bash
 python chrome_tab_http_server.py
@@ -64,7 +65,7 @@ python chrome_tab_http_server.py
 
 The server will load tokens from `~/.chrome-tab-reader/tokens.json`
 
-### 5. Test Authentication
+### 4. Test Authentication
 
 Test with curl:
 
@@ -122,22 +123,17 @@ export CHROME_TAB_READER_TOKEN="your-token-here"
 
 ## Token Management
 
-### Viewing Your Current Token
-
-1. Click the extension icon
-2. Your token is displayed at the top of the popup
-3. Click "Copy" to copy it
-
 ### Regenerating a Token
 
 If you need to regenerate your token (e.g., if it was compromised):
 
-1. Click the extension icon
-2. Click "Regenerate" button
-3. Confirm the action
-4. Copy the new token
-5. **Update the token in `~/.chrome-tab-reader/tokens.json`**
-6. **Update the token in any scripts or configurations**
+1. Generate a new token using the same method as before:
+   ```bash
+   python3 -c "import secrets; print(secrets.token_hex(32))"
+   ```
+2. **Update the token in `~/.chrome-tab-reader/tokens.json`**
+3. **Update the token in any scripts or configurations**
+4. **Restart the HTTP server**
 
 ### Multiple Tokens
 
@@ -175,17 +171,11 @@ chmod 600 ~/.chrome-tab-reader/tokens.json
 
 ### "401 Unauthorized" Errors
 
-- Verify token is correct (copy from extension popup)
+- Verify token is correct (check your secure storage where you saved it)
 - Check `~/.chrome-tab-reader/tokens.json` contains the token
 - Ensure token is in the "tokens" array
 - Restart the HTTP server after updating tokens.json
 - Verify Authorization header format: `Bearer YOUR_TOKEN`
-
-### Token Not Showing in Extension
-
-- Refresh the extension popup
-- Check browser console for errors (F12)
-- Reinstall the extension if needed
 
 ### Server Not Loading Tokens
 
@@ -198,8 +188,8 @@ chmod 600 ~/.chrome-tab-reader/tokens.json
 ### Token Format
 
 - **Length**: 64 hexadecimal characters (256 bits)
-- **Generation**: `crypto.getRandomValues()` (browser's cryptographic RNG)
-- **Storage**: Chrome extension local storage (encrypted by Chrome)
+- **Generation**: `secrets.token_hex(32)` or `openssl rand -hex 32`
+- **Storage**: Stored in `~/.chrome-tab-reader/tokens.json`
 
 ### Authentication Flow
 

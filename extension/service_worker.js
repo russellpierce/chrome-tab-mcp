@@ -60,42 +60,6 @@
 
 console.log("[Chrome Tab Reader] Service Worker loaded");
 
-/**
- * Generate a cryptographically random access token
- */
-function generateAccessToken() {
-    const array = new Uint8Array(32); // 256 bits
-    crypto.getRandomValues(array);
-    // Convert to base64-url safe string
-    return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * Get or create access token
- */
-async function getAccessToken() {
-    const result = await chrome.storage.local.get(['accessToken']);
-    if (result.accessToken) {
-        return result.accessToken;
-    }
-
-    // Generate new token
-    const token = generateAccessToken();
-    await chrome.storage.local.set({ accessToken: token });
-    console.log("[Chrome Tab Reader] Generated new access token");
-    return token;
-}
-
-/**
- * Regenerate access token
- */
-async function regenerateAccessToken() {
-    const token = generateAccessToken();
-    await chrome.storage.local.set({ accessToken: token });
-    console.log("[Chrome Tab Reader] Regenerated access token");
-    return token;
-}
-
 // Native messaging port
 let nativePort = null;
 
@@ -195,9 +159,8 @@ function connectToNativeHost() {
     }
 }
 
-// Initialize token on install
+// Initialize on install
 chrome.runtime.onInstalled.addListener(async () => {
-    await getAccessToken();
     console.log("[Chrome Tab Reader] Extension installed/updated");
 
     // Connect to native messaging host
@@ -506,20 +469,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "health_check") {
         sendResponse(getHealthStatus());
         return false;
-    }
-
-    if (request.action === "get_access_token") {
-        getAccessToken().then(sendResponse).catch((error) => {
-            sendResponse({ error: error.message });
-        });
-        return true;
-    }
-
-    if (request.action === "regenerate_access_token") {
-        regenerateAccessToken().then(sendResponse).catch((error) => {
-            sendResponse({ error: error.message });
-        });
-        return true;
     }
 });
 
