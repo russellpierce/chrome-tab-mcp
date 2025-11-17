@@ -140,6 +140,94 @@
       color: #9ca3af;
       text-align: center;
     }
+
+    .console-section {
+      margin-top: 12px;
+    }
+
+    .console-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px 6px 0 0;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .console-header:hover {
+      background: #e5e7eb;
+    }
+
+    .console-title {
+      font-weight: 600;
+      font-size: 11px;
+      color: #4b5563;
+    }
+
+    .console-toggle {
+      font-size: 10px;
+      color: #6b7280;
+    }
+
+    .console-output {
+      background: #1f2937;
+      color: #e5e7eb;
+      border: 1px solid #e5e7eb;
+      border-top: none;
+      border-radius: 0 0 6px 6px;
+      padding: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: "Courier New", monospace;
+      font-size: 10px;
+      line-height: 1.4;
+      display: none;
+    }
+
+    .console-output.open {
+      display: block;
+    }
+
+    .console-log {
+      margin: 2px 0;
+      padding: 2px 4px;
+      border-radius: 2px;
+    }
+
+    .console-log.info {
+      color: #93c5fd;
+    }
+
+    .console-log.success {
+      color: #86efac;
+    }
+
+    .console-log.warn {
+      color: #fde047;
+    }
+
+    .console-log.error {
+      color: #fca5a5;
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .console-clear-btn {
+      padding: 2px 8px;
+      font-size: 10px;
+      background: #374151;
+      color: #9ca3af;
+      border: 1px solid #4b5563;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .console-clear-btn:hover {
+      background: #4b5563;
+      color: #e5e7eb;
+    }
   </style>
 </head>
 <body>
@@ -168,6 +256,17 @@
 
   <div class="content-area empty" id="contentArea">
     <p>Click "Extract Content" to analyze the current page</p>
+  </div>
+
+  <div class="console-section">
+    <div class="console-header" id="consoleHeader">
+      <span class="console-title">Console Logs</span>
+      <div>
+        <button class="console-clear-btn" id="consoleClearBtn">Clear</button>
+        <span class="console-toggle" id="consoleToggle">▼</span>
+      </div>
+    </div>
+    <div class="console-output" id="consoleOutput"></div>
   </div>
 
   <script src="popup.js"></script>

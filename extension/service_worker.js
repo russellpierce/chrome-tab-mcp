@@ -7,6 +7,57 @@
  * - Delegates to content script for actual extraction
  */
 
+// Intercept console.log to send to popup
+(function() {
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    function sendLogToPopup(level, args) {
+        const message = Array.from(args).map(arg => {
+            if (typeof arg === 'object') {
+                try {
+                    return JSON.stringify(arg);
+                } catch (e) {
+                    return String(arg);
+                }
+            }
+            return String(arg);
+        }).join(' ');
+
+        // Send to all extension contexts (popup)
+        chrome.runtime.sendMessage({
+            type: 'console_log',
+            level: level,
+            message: message,
+            source: 'service-worker'
+        }).catch(() => {
+            // Popup might not be open, ignore errors
+        });
+    }
+
+    console.log = function(...args) {
+        originalLog.apply(console, args);
+        if (args[0] && args[0].includes('[Chrome Tab Reader]')) {
+            sendLogToPopup('info', args);
+        }
+    };
+
+    console.warn = function(...args) {
+        originalWarn.apply(console, args);
+        if (args[0] && args[0].includes('[Chrome Tab Reader]')) {
+            sendLogToPopup('warn', args);
+        }
+    };
+
+    console.error = function(...args) {
+        originalError.apply(console, args);
+        if (args[0] && args[0].includes('[Chrome Tab Reader]')) {
+            sendLogToPopup('error', args);
+        }
+    };
+})();
+
 console.log("[Chrome Tab Reader] Service Worker loaded");
 
 /**
@@ -300,9 +351,19 @@ function getHealthStatus() {
 }
 
 /**
- * Handle messages from popup
+ * Handle messages from popup and content scripts
  */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // Handle console log messages from content scripts - relay to popup
+    if (request.type === 'console_log') {
+        // Don't log this message to avoid infinite loop
+        // Just relay it to the popup
+        chrome.runtime.sendMessage(request).catch(() => {
+            // Popup might not be open, ignore
+        });
+        return false;
+    }
+
     console.log("[Chrome Tab Reader] Service worker received message:", request.action);
 
     if (request.action === "extract_current_tab") {

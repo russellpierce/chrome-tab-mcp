@@ -18,6 +18,10 @@ function initializePopup() {
     const clearBtn = document.getElementById('clearBtn');
     const statusEl = document.getElementById('status');
     const contentAreaEl = document.getElementById('contentArea');
+    const consoleOutputEl = document.getElementById('consoleOutput');
+    const consoleHeaderEl = document.getElementById('consoleHeader');
+    const consoleToggleEl = document.getElementById('consoleToggle');
+    const consoleClearBtn = document.getElementById('consoleClearBtn');
 
     // Load and display access token
     loadAccessToken();
@@ -25,11 +29,24 @@ function initializePopup() {
     // Update tab title on load
     updateTabTitle();
 
+    // Set up console
+    initializeConsole();
+
     // Set up event listeners
     copyTokenBtn.addEventListener('click', () => copyAccessToken());
     regenerateTokenBtn.addEventListener('click', () => regenerateAccessToken());
     extractBtn.addEventListener('click', () => extractCurrentTab(statusEl, contentAreaEl, extractBtn));
     clearBtn.addEventListener('click', () => clearContent(contentAreaEl));
+    consoleHeaderEl.addEventListener('click', (e) => {
+        // Don't toggle if clicking the clear button
+        if (e.target !== consoleClearBtn) {
+            toggleConsole();
+        }
+    });
+    consoleClearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearConsole();
+    });
 
     /**
      * Load and display access token
@@ -158,4 +175,72 @@ function initializePopup() {
         statusEl.textContent = message;
         statusEl.className = `status ${type}`;
     }
+
+    /**
+     * Initialize console display
+     */
+    function initializeConsole() {
+        // Listen for log messages from background and content scripts
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.type === 'console_log') {
+                addConsoleLog(message.level || 'info', message.message, message.source);
+            }
+        });
+
+        // Add initial message
+        addConsoleLog('info', 'Popup initialized', 'popup');
+    }
+
+    /**
+     * Toggle console visibility
+     */
+    function toggleConsole() {
+        const isOpen = consoleOutputEl.classList.toggle('open');
+        consoleToggleEl.textContent = isOpen ? '▲' : '▼';
+    }
+
+    /**
+     * Clear console output
+     */
+    function clearConsole() {
+        consoleOutputEl.innerHTML = '';
+        addConsoleLog('info', 'Console cleared', 'popup');
+    }
+
+    /**
+     * Add a log message to the console display
+     */
+    function addConsoleLog(level, message, source) {
+        const logEntry = document.createElement('div');
+        logEntry.className = `console-log ${level}`;
+
+        const timestamp = new Date().toLocaleTimeString('en-US', {
+            hour12: false,
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            fractionalSecondDigits: 3
+        });
+
+        const sourcePrefix = source ? `[${source}] ` : '';
+        logEntry.textContent = `${timestamp} ${sourcePrefix}${message}`;
+
+        consoleOutputEl.appendChild(logEntry);
+
+        // Auto-scroll to bottom
+        consoleOutputEl.scrollTop = consoleOutputEl.scrollHeight;
+
+        // Keep max 100 log entries to prevent memory issues
+        while (consoleOutputEl.children.length > 100) {
+            consoleOutputEl.removeChild(consoleOutputEl.firstChild);
+        }
+
+        // Auto-open console on error or warn
+        if ((level === 'error' || level === 'warn') && !consoleOutputEl.classList.contains('open')) {
+            toggleConsole();
+        }
+    }
+
+    // Expose functions for use in the popup scope
+    window.addConsoleLog = addConsoleLog;
 }

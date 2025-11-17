@@ -8,6 +8,57 @@
  *  3. Extract clean content with Readability.js
  */
 
+// Intercept console.log to send to popup
+(function() {
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    function sendLogToPopup(level, args) {
+        const message = Array.from(args).map(arg => {
+            if (typeof arg === 'object') {
+                try {
+                    return JSON.stringify(arg);
+                } catch (e) {
+                    return String(arg);
+                }
+            }
+            return String(arg);
+        }).join(' ');
+
+        // Send to service worker which will relay to popup
+        chrome.runtime.sendMessage({
+            type: 'console_log',
+            level: level,
+            message: message,
+            source: 'content'
+        }).catch(() => {
+            // Popup might not be open, ignore errors
+        });
+    }
+
+    console.log = function(...args) {
+        originalLog.apply(console, args);
+        if (args[0] && args[0].includes('[Chrome Tab Reader]')) {
+            sendLogToPopup('info', args);
+        }
+    };
+
+    console.warn = function(...args) {
+        originalWarn.apply(console, args);
+        if (args[0] && args[0].includes('[Chrome Tab Reader]')) {
+            sendLogToPopup('warn', args);
+        }
+    };
+
+    console.error = function(...args) {
+        originalError.apply(console, args);
+        if (args[0] && args[0].includes('[Chrome Tab Reader]')) {
+            sendLogToPopup('error', args);
+        }
+    };
+})();
+
 console.log("[Chrome Tab Reader] Content script loaded");
 
 /**
