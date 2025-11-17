@@ -11,29 +11,130 @@
 console.log("[Chrome Tab Reader] Content script loaded");
 
 /**
+ * Try incremental scrolling to simulate real user behavior
+ */
+async function tryIncrementalScroll(targetPosition, delay) {
+    const steps = 5;
+    const currentPosition = window.pageYOffset || document.documentElement.scrollTop;
+
+    for (let step = 1; step <= steps; step++) {
+        const position = currentPosition + ((targetPosition - currentPosition) * step / steps);
+        window.scrollTo(0, position);
+        window.dispatchEvent(new Event('scroll', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, delay / steps));
+    }
+}
+
+/**
+ * Try scrolling custom containers (for sites like LinkedIn)
+ */
+async function tryCustomContainerScroll() {
+    const customContainers = [
+        ...Array.from(document.querySelectorAll('[role="main"]')),
+        ...Array.from(document.querySelectorAll('.scaffold-layout__main')), // LinkedIn
+        ...Array.from(document.querySelectorAll('[class*="feed"]')),
+        ...Array.from(document.querySelectorAll('[class*="scroll"]')),
+    ].filter(el => el && el.scrollHeight > el.clientHeight);
+
+    for (const el of customContainers) {
+        try {
+            const oldScrollTop = el.scrollTop;
+            el.scrollTop = el.scrollHeight;
+            el.dispatchEvent(new Event('scroll', { bubbles: true }));
+            if (el.scrollTop !== oldScrollTop) {
+                return true; // Successfully scrolled
+            }
+        } catch (e) {
+            // Continue to next element
+        }
+    }
+    return false;
+}
+
+/**
  * Phase 1: Trigger Lazy-Loading
  * Simulates user scrolling to trigger infinite scroll and lazy-loading patterns
+ * Tries methods sequentially and stops when new content is detected
  */
 async function triggerLazyLoading(maxScrolls = 5, scrollDelay = 500) {
     console.log("[Chrome Tab Reader] Phase 1: Triggering lazy-loading...");
-    let lastHeight = document.body.scrollHeight;
     let scrollCount = 0;
 
     for (let i = 0; i < maxScrolls; i++) {
-        window.scrollTo(0, document.body.scrollHeight);
-        await new Promise(resolve => setTimeout(resolve, scrollDelay));
+        const startHeight = document.body.scrollHeight;
+        const targetPosition = document.body.scrollHeight;
+        let methodUsed = null;
 
-        let newHeight = document.body.scrollHeight;
-        if (newHeight === lastHeight) {
+        // Method 5: Incremental scrolling (most human-like)
+        console.log("[Chrome Tab Reader] Trying incremental scroll...");
+        await tryIncrementalScroll(targetPosition, scrollDelay);
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        if (document.body.scrollHeight > startHeight) {
+            methodUsed = "incremental scroll";
+        }
+
+        // Method 4: Dispatch scroll events
+        if (!methodUsed) {
+            console.log("[Chrome Tab Reader] Trying scroll event dispatch...");
+            window.scrollTo(0, targetPosition);
+            window.dispatchEvent(new Event('scroll', { bubbles: true }));
+            document.dispatchEvent(new Event('scroll', { bubbles: true }));
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            if (document.body.scrollHeight > startHeight) {
+                methodUsed = "scroll events";
+            }
+        }
+
+        // Method 3: Custom scroll containers
+        if (!methodUsed) {
+            console.log("[Chrome Tab Reader] Trying custom containers...");
+            await tryCustomContainerScroll();
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            if (document.body.scrollHeight > startHeight) {
+                methodUsed = "custom containers";
+            }
+        }
+
+        // Method 2: Direct property assignment
+        if (!methodUsed) {
+            console.log("[Chrome Tab Reader] Trying direct property assignment...");
+            document.documentElement.scrollTop = targetPosition;
+            document.body.scrollTop = targetPosition;
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            if (document.body.scrollHeight > startHeight) {
+                methodUsed = "direct assignment";
+            }
+        }
+
+        // Method 1: window.scrollTo with smooth behavior
+        if (!methodUsed) {
+            console.log("[Chrome Tab Reader] Trying smooth scrollTo...");
+            window.scrollTo({ top: targetPosition, behavior: 'smooth' });
+            await new Promise(resolve => setTimeout(resolve, scrollDelay));
+
+            if (document.body.scrollHeight > startHeight) {
+                methodUsed = "smooth scrollTo";
+            }
+        }
+
+        // Check if we loaded new content
+        const newHeight = document.body.scrollHeight;
+        if (newHeight > startHeight) {
+            scrollCount++;
+            console.log(`[Chrome Tab Reader] Phase 1: New content detected using ${methodUsed} (${startHeight} → ${newHeight})`);
+            // Continue to next scroll iteration
+        } else {
             console.log(`[Chrome Tab Reader] Phase 1: No new content after scroll ${i + 1}, stopping`);
             break;
         }
-        lastHeight = newHeight;
-        scrollCount++;
     }
 
     // Return to top
-    window.scrollTo(0, 0);
+    window.scrollTo({ top: 0, behavior: 'instant' });
     console.log(`[Chrome Tab Reader] Phase 1: Completed ${scrollCount} scrolls`);
 }
 
