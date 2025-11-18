@@ -1,0 +1,43 @@
+# Line ending normalization
+# Set default behavior to auto-detect and normalize to LF
+* text=auto
+
+# Explicitly declare text files and their line ending style
+# These files should use LF (Unix-style) line endings
+*.sh text eol=lf
+*.bash text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+
+# PowerShell scripts MUST use CRLF (Windows-style) line endings
+# This is required for PowerShell on Windows to parse correctly
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf
+
+# Batch files should use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files (don't attempt to normalize)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mov binary
+*.mp4 binary
+*.mp3 binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.min.js binary
+*.wasm binary
