@@ -123,6 +123,29 @@ case "$TEST_TYPE" in
         fi
         ;;
 
+    extension)
+        echo -e "${GREEN}Running Chrome extension tests...${NC}"
+        echo -e "${YELLOW}Note: These tests require Chrome and will open browser windows${NC}"
+        echo ""
+
+        # Check if npm is available
+        if ! command -v npm &> /dev/null; then
+            echo -e "${RED}✗ npm not found${NC}"
+            echo "Please install Node.js and npm to run extension tests"
+            exit 1
+        fi
+
+        # Check if node_modules exists
+        if [ ! -d "node_modules" ]; then
+            echo -e "${YELLOW}Installing npm dependencies...${NC}"
+            npm install
+            echo ""
+        fi
+
+        echo -e "${BLUE}→ Running Jest/Puppeteer extension tests${NC}"
+        npm test
+        ;;
+
     manual)
         echo -e "${GREEN}Running manual interactive tests...${NC}"
         echo -e "${YELLOW}This will test the actual connection to Chrome${NC}"
@@ -153,6 +176,16 @@ case "$TEST_TYPE" in
         uv run python tests/manual_test_native_messaging.py protocol || true
         echo ""
 
+        echo -e "${BLUE}5. Chrome Extension Tests (Jest/Puppeteer)${NC}"
+        if command -v npm &> /dev/null && [ -d "node_modules" ]; then
+            npm test || true
+            echo ""
+        else
+            echo -e "${YELLOW}⚠ Skipping extension tests (npm not found or dependencies not installed)${NC}"
+            echo "  Run: npm install && npm test"
+            echo ""
+        fi
+
         echo -e "${YELLOW}Skipping integration and E2E tests (run with: ./run_tests.sh e2e)${NC}"
         ;;
 
@@ -161,6 +194,7 @@ case "$TEST_TYPE" in
         rm -rf .pytest_cache
         rm -rf htmlcov
         rm -rf .coverage
+        rm -rf coverage
         rm -rf tests/__pycache__
         rm -rf tests/.pytest_cache
         rm -f /tmp/test_chrome_tab_mcp.sock
@@ -175,6 +209,7 @@ case "$TEST_TYPE" in
         echo "  unit         - Run unit tests (FastAPI schema, HTTP server, native messaging)"
         echo "  integration  - Run integration tests (requires native host)"
         echo "  e2e          - Run end-to-end tests (auto-checks & installs Playwright)"
+        echo "  extension    - Run Chrome extension tests (Jest/Puppeteer - requires Chrome)"
         echo "  manual       - Run manual interactive test"
         echo "  coverage     - Run tests with coverage report"
         echo "  all          - Run all tests (default)"
@@ -183,7 +218,7 @@ case "$TEST_TYPE" in
         echo ""
         echo "Test Environment Compatibility:"
         echo "  ✓ CI-safe:      ci, unit (no Chrome required)"
-        echo "  ✗ Local only:   integration, e2e, manual (Chrome required)"
+        echo "  ✗ Local only:   integration, e2e, extension, manual (Chrome required)"
         echo ""
         echo "Environment Setup:"
         echo "  The 'e2e' test mode automatically checks environment setup and will"
