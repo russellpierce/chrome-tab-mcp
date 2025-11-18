@@ -75,6 +75,21 @@ BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = 8765
 
 
+def should_log_url(url: str | None) -> bool:
+    """Check if URL should be included in logs.
+
+    Args:
+        url: URL to check (can be None)
+
+    Returns:
+        bool: False if URL should be excluded from logs, True otherwise
+    """
+    if not url:
+        return True
+    # Exclude example.com from logs
+    return "example.com" not in url.lower()
+
+
 class BridgeConnection:
     """Manages persistent connection to the native messaging bridge."""
 
@@ -182,7 +197,8 @@ class BridgeConnection:
             # Parse response
             response = json.loads(response_data.decode('utf-8').strip())
             logger.info(f"✓ Received response: status={response.get('status')}, content_length={len(response.get('content', ''))}")
-            logger.debug(f"Response details: title={response.get('title')}, url={response.get('url')}")
+            if should_log_url(response.get('url')):
+                logger.debug(f"Response details: title={response.get('title')}, url={response.get('url')}")
             return response
 
         except socket.timeout:

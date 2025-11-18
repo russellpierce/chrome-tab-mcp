@@ -59,6 +59,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def should_log_url(url: str) -> bool:
+    """Check if URL should be included in logs.
+
+    Args:
+        url: URL to check
+
+    Returns:
+        bool: False if URL should be excluded from logs, True otherwise
+    """
+    if not url:
+        return True
+    # Exclude example.com from logs
+    return "example.com" not in url.lower()
+
 # Native Messaging bridge configuration
 BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = 8765
@@ -391,7 +406,8 @@ class ChromeTabExtractor:
     @staticmethod
     def navigate_and_extract(url: str, wait_for_ms: int = 0) -> Dict[str, Any]:
         """Navigate to URL and extract content via Native Messaging bridge"""
-        logger.info(f"Navigate and extract: {url}")
+        if should_log_url(url):
+            logger.info(f"Navigate and extract: {url}")
 
         request = {
             "action": "navigate_and_extract",
@@ -613,7 +629,8 @@ async def navigate_and_extract(
 
     The extension uses the three-phase extraction process by default.
     """
-    logger.info(f"Navigate and extract request: url={request.url}, strategy={request.strategy}")
+    if should_log_url(request.url):
+        logger.info(f"Navigate and extract request: url={request.url}, strategy={request.strategy}")
     result = ChromeTabExtractor.navigate_and_extract(request.url, request.wait_for_ms)
 
     if result.get("status") != "success":
