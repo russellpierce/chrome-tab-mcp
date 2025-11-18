@@ -12,14 +12,11 @@ Run with: pytest tests/test_e2e_native_messaging.py -v -m e2e
 
 import pytest
 import json
-import subprocess
 import time
 import socket
-import threading
-import re
 import sys
 from pathlib import Path
-from playwright.sync_api import sync_playwright, expect
+from playwright.sync_api import sync_playwright
 
 # Add tests directory to path for importing e2e_native_host_manager
 sys.path.insert(0, str(Path(__file__).parent))
@@ -27,7 +24,6 @@ from e2e_native_host_manager import (
     backup_manifest,
     restore_manifest,
     add_test_extension_id,
-    remove_test_extension_id,
     get_manifest_path
 )
 

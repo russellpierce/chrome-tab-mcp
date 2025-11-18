@@ -37,19 +37,17 @@ Dependencies:
 """
 
 import json
-import sys
 import platform
-import subprocess
 import os
 import socket
 from pathlib import Path
-from typing import Dict, Any, Set, Optional, List
+from typing import Dict, Any, Set, Optional
 import logging
 
 # FastAPI imports
 from fastapi import FastAPI, HTTPException, Security, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 # Set up logging
@@ -304,7 +302,7 @@ def load_valid_tokens() -> Set[str]:
 
             if current_perms != 0o600:
                 logger.warning(f"Tokens file has insecure permissions: {oct(current_perms)}")
-                logger.warning(f"Attempting to fix permissions to 600...")
+                logger.warning("Attempting to fix permissions to 600...")
                 TOKENS_FILE.chmod(0o600)
                 logger.info(f"Fixed permissions on {TOKENS_FILE}")
         except Exception as e:
@@ -511,7 +509,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
     """
     token = credentials.credentials
     if token not in VALID_TOKENS:
-        logger.warning(f"Invalid token attempt")
+        logger.warning("Invalid token attempt")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
@@ -689,7 +687,7 @@ Requirements:
 
     logger.info(f"Starting Chrome Tab Reader HTTP server on {args.host}:{args.port}")
     logger.info(f"Native Messaging bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")
-    logger.info(f"Interactive API documentation:")
+    logger.info("Interactive API documentation:")
     logger.info(f"  - Swagger UI: http://{args.host}:{args.port}/docs")
     logger.info(f"  - ReDoc: http://{args.host}:{args.port}/redoc")
     logger.info(f"  - OpenAPI spec: http://{args.host}:{args.port}/openapi.json")
