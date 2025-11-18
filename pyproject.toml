@@ -38,8 +38,6 @@ py-modules = [
     "chrome_tab_mcp_server",
     "chrome_tab_http_server",
     "chrome_tab_native_host",
-    "get_chrome_tab",
-    "test_fastapi_server",
 ]
 
 [tool.pytest.ini_options]

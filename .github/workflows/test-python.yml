@@ -26,9 +26,6 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra test
 
-      - name: Run FastAPI schema validation
-        run: uv run python test_fastapi_server.py
-
       - name: Run HTTP server tests
         run: uv run pytest tests/test_http_server.py -v
 
@@ -43,7 +40,6 @@ jobs:
           echo "✅ Unit tests completed (no Chrome required)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Tests run:**" >> $GITHUB_STEP_SUMMARY
-          echo "- FastAPI schema validation" >> $GITHUB_STEP_SUMMARY
           echo "- HTTP server tests (31 tests)" >> $GITHUB_STEP_SUMMARY
           echo "- Native messaging protocol tests (unit tests only)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

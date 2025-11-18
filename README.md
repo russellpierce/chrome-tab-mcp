@@ -146,12 +146,11 @@ This repository contains three ways to access Chrome tab content:
 
 ### 3. MCP Server (Cross-platform via Native Messaging)
 - Model Context Protocol server for Claude Code
-- **NEW:** Uses Chrome Native Messaging for direct extension communication
+- Uses Chrome Native Messaging for direct extension communication
 - Cross-platform support (Windows, macOS, Linux)
 - Integrates with local Ollama AI models
 - Superior three-phase extraction via browser extension
 - See: `chrome_tab_mcp_server.py`, `README_MCP.md`, and `NATIVE_MESSAGING_SETUP.md`
-- Legacy AppleScript mode still available (macOS only)
 
 ## Quick Start
 
@@ -399,7 +398,6 @@ http://localhost:8888/
 | Chrome Extension | ✅ | ✅ | ✅ |
 | HTTP Server | ✅ | ✅ | ✅ |
 | MCP Server (Native Messaging) | ✅ | ✅ | ✅ |
-| MCP Server (Legacy AppleScript) | ❌ | ✅ | ❌ |
 
 ## Browser Support
 

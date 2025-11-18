@@ -661,14 +661,6 @@ Requirements:
     args.host = "127.0.0.1"
     logger.info("Security: Server restricted to localhost (127.0.0.1) only")
 
-    # Verify prerequisites
-    if platform.system() == "Darwin":
-        script_path = Path(__file__).parent / "chrome_tab.scpt"
-        if not script_path.exists():
-            logger.error(f"chrome_tab.scpt not found at {script_path}")
-            logger.error("Please make sure the AppleScript file is in the same directory")
-            sys.exit(1)
-
     logger.info(f"Starting Chrome Tab Reader HTTP server on {args.host}:{args.port}")
     logger.info(f"Native Messaging bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")
     logger.info(f"Interactive API documentation:")

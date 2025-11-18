@@ -183,7 +183,6 @@ Tested and verified on:
 
 ## Known Limitations
 
-- **macOS only AppleScript:** Extension is cross-platform, but original AppleScript tool is macOS only
 - **Localhost only:** MCP server must be on same machine (http://127.0.0.1:3000)
 - **Text extraction:** Works with text content; images/PDFs require special handling
 - **Synchronous operation:** UI blocks during AI processing (5+ minutes typical)
