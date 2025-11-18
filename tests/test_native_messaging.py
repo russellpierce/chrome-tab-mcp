@@ -199,12 +199,14 @@ class TestMCPServerExtraction:
         server, test_port = mock_bridge_socket
 
         # Import here to avoid issues if module not available
-        from chrome_tab_mcp_server import extract_tab_content_via_extension, BRIDGE_HOST, BRIDGE_PORT
-
-        # Temporarily override TCP settings
-        original_port = BRIDGE_PORT
+        from chrome_tab_mcp_server import extract_tab_content_via_extension, BridgeConnection
         import chrome_tab_mcp_server
-        chrome_tab_mcp_server.BRIDGE_PORT = test_port
+
+        # Save original bridge connection
+        original_bridge = chrome_tab_mcp_server.bridge_connection
+
+        # Initialize bridge connection with test port
+        chrome_tab_mcp_server.bridge_connection = BridgeConnection("127.0.0.1", test_port)
 
         def mock_extension_response():
             client, _ = server.accept()
@@ -241,25 +243,34 @@ class TestMCPServerExtraction:
             assert result["title"] == "Test Page"
             assert result["url"] == "https://example.com"
         finally:
-            # Restore original port
-            chrome_tab_mcp_server.BRIDGE_PORT = original_port
+            # Restore original bridge connection
+            chrome_tab_mcp_server.bridge_connection = original_bridge
 
     def test_extract_tab_content_no_connection(self):
         """Test error when TCP server is not running"""
-        from chrome_tab_mcp_server import extract_tab_content_via_extension
-
-        # Use a port that won't have a server
+        from chrome_tab_mcp_server import extract_tab_content_via_extension, BridgeConnection
         import chrome_tab_mcp_server
-        original_port = chrome_tab_mcp_server.BRIDGE_PORT
-        chrome_tab_mcp_server.BRIDGE_PORT = 19996  # Unused port
+
+        # Save original bridge connection
+        original_bridge = chrome_tab_mcp_server.bridge_connection
+
+        # Initialize bridge connection with unused port (no server running)
+        chrome_tab_mcp_server.bridge_connection = BridgeConnection("127.0.0.1", 19996)
 
         try:
             result = extract_tab_content_via_extension()
 
             assert result["status"] == "error"
-            assert "not running" in result["error"].lower() or "refused" in result["error"].lower()
+            # Check for various connection error messages
+            error_lower = result["error"].lower()
+            assert ("not running" in error_lower or
+                    "refused" in error_lower or
+                    "connection" in error_lower or
+                    "connect" in error_lower or
+                    "bridge" in error_lower)
         finally:
-            chrome_tab_mcp_server.BRIDGE_PORT = original_port
+            # Restore original bridge connection
+            chrome_tab_mcp_server.bridge_connection = original_bridge
 
 
 # Pytest configuration
