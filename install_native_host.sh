@@ -40,13 +40,38 @@ EXTENSION_ID="$1"
 echo -e "${GREEN}Chrome Tab Reader - Native Messaging Host Installer${NC}"
 echo ""
 
+# Detect the target user's home directory
+# Priority: 1. SUDO_USER if running via sudo
+#          2. Infer from script directory if in /home/username
+#          3. Fall back to $HOME
+TARGET_HOME="$HOME"
+
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    # Running via sudo - use the real user's home
+    TARGET_HOME=$(eval echo ~"$SUDO_USER")
+    echo -e "${YELLOW}Detected sudo context, installing for user: $SUDO_USER${NC}"
+elif [ "$(id -u)" -eq 0 ]; then
+    # Running as root but not via sudo - try to infer from script location
+    if [[ "$SCRIPT_DIR" == /home/* ]]; then
+        # Extract username from path like /home/username/...
+        INFERRED_USER=$(echo "$SCRIPT_DIR" | cut -d'/' -f3)
+        if [ -d "/home/$INFERRED_USER" ]; then
+            TARGET_HOME="/home/$INFERRED_USER"
+            echo -e "${YELLOW}Running as root, detected user from script location: $INFERRED_USER${NC}"
+        fi
+    fi
+fi
+
+echo "Target user home: $TARGET_HOME"
+echo ""
+
 # Detect platform
 if [[ "$OSTYPE" == "linux-gnu"* ]]; then
     PLATFORM="linux"
-    MANIFEST_DIR="$HOME/.config/google-chrome/NativeMessagingHosts"
+    MANIFEST_DIR="$TARGET_HOME/.config/google-chrome/NativeMessagingHosts"
 elif [[ "$OSTYPE" == "darwin"* ]]; then
     PLATFORM="macos"
-    MANIFEST_DIR="$HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
+    MANIFEST_DIR="$TARGET_HOME/Library/Application Support/Google/Chrome/NativeMessagingHosts"
 elif [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
     PLATFORM="windows"
     MANIFEST_DIR="$APPDATA/Google/Chrome/NativeMessagingHosts"
