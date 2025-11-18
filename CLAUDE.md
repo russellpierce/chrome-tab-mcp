@@ -22,7 +22,7 @@ This guide helps AI assistants (like Claude Code) understand the Chrome Tab Read
 ## Repository Overview
 
 **Project Name:** Chrome Tab Reader
-**Purpose:** Extract and analyze content from Chrome tabs using AI assistance
+**Purpose:** Extract and analyze content from Chrome tabs using AI assistance.  In particular distill contents from a tab before reporting back to a more expensive model.
 **Primary Language:** JavaScript (extension), Python (servers)
 **License:** ISC/MIT
 
