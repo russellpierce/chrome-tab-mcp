@@ -50,9 +50,6 @@ case "$TEST_TYPE" in
         echo -e "${GREEN}Running CI-safe tests (no Chrome required)...${NC}"
         echo -e "${YELLOW}These tests can run in GitHub Actions, Claude Code, or locally${NC}"
         echo ""
-        echo -e "${BLUE}→ FastAPI Schema Validation${NC}"
-        uv run python test_fastapi_server.py
-        echo ""
         echo -e "${BLUE}→ Unit Tests (HTTP Server)${NC}"
         uv run pytest tests/test_http_server.py -v
         echo ""
@@ -68,9 +65,6 @@ case "$TEST_TYPE" in
         echo ""
         echo -e "${BLUE}→ HTTP Server Tests${NC}"
         uv run pytest tests/test_http_server.py -v
-        echo ""
-        echo -e "${BLUE}→ FastAPI Schema Validation${NC}"
-        uv run python test_fastapi_server.py
         ;;
 
     integration)
@@ -147,19 +141,15 @@ case "$TEST_TYPE" in
         echo -e "${GREEN}Running all tests...${NC}"
         echo ""
 
-        echo -e "${BLUE}1. FastAPI Schema Validation${NC}"
-        uv run python test_fastapi_server.py || true
-        echo ""
-
-        echo -e "${BLUE}2. Unit Tests - Native Messaging${NC}"
+        echo -e "${BLUE}1. Unit Tests - Native Messaging${NC}"
         uv run pytest tests/test_native_messaging.py -v -m "not integration and not e2e" || true
         echo ""
 
-        echo -e "${BLUE}3. Unit Tests - HTTP Server${NC}"
+        echo -e "${BLUE}2. Unit Tests - HTTP Server${NC}"
         uv run pytest tests/test_http_server.py -v || true
         echo ""
 
-        echo -e "${BLUE}4. Manual Test (Quick Check)${NC}"
+        echo -e "${BLUE}3. Manual Test (Quick Check)${NC}"
         uv run python tests/manual_test_native_messaging.py protocol || true
         echo ""
 

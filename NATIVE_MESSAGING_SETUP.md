@@ -276,17 +276,6 @@ The native host acts as a bridge:
 8. MCP server processes content with Ollama
 ```
 
-## Comparison with AppleScript Approach
-
-| Feature | Native Messaging | AppleScript (old) |
-|---------|------------------|-------------------|
-| Platform support | ✅ Windows, macOS, Linux | ❌ macOS only |
-| Extraction quality | ✅ Three-phase (advanced) | ⚠️  Basic text extraction |
-| Setup complexity | Medium (one-time) | Low |
-| Dependencies | Chrome extension | AppleScript |
-| Performance | Fast | Fast |
-| Reliability | High | Medium (UI dependent) |
-
 ## Advanced Configuration
 
 ### Custom TCP Port

@@ -577,7 +577,7 @@ chrome.action.onClicked.addListener((tab) => {
  * Handle Native Messaging connections from MCP server
  *
  * This enables the MCP server to communicate directly with the extension
- * without needing an HTTP server or AppleScript.
+ * without needing an HTTP server.
  */
 chrome.runtime.onConnectExternal.addListener((port) => {
     console.log("[Chrome Tab Reader] Native messaging connection established");
