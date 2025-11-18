@@ -1,6 +1,6 @@
 module.exports = {
   testEnvironment: 'node',
-  testTimeout: 30000, // 30 seconds for extension tests with browser automation
+  testTimeout: 60000, // 60 seconds for extension tests with browser automation (increased for slow content script injection)
   verbose: true,
   collectCoverageFrom: [
     'extension/**/*.js',
