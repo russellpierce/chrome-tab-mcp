@@ -1,466 +1,225 @@
 # Chrome Tab Reader
 
+> **Note:** This document is AI-authored with human oversight.
+
 ![Test Extension](https://github.com/russellpierce/chrome-tab-mcp/actions/workflows/test-extension.yml/badge.svg)
 
-Extract and analyze content from Chrome tabs using AI. Supports multiple access methods: Chrome extension, HTTP API, and MCP server.
+Extract and analyze content from Chrome tabs using AI through the Model Context Protocol (MCP). Works cross-platform with Chrome extension + Native Messaging or HTTP API.
 
-## Quick Start for Existing Setups
+## Overview
 
-Already have Chrome Tab Reader installed? Here's how to start it:
+Chrome Tab Reader provides AI-powered webpage content extraction with three access methods:
 
-**Just using the extension:**
-```bash
-# Open Chrome, navigate to a page, click the extension icon → Extract Content
-```
+1. **MCP Server + Extension** (Recommended) - Cross-platform, direct browser integration
+2. **HTTP API Server** - For programmatic access and custom integrations
+3. **Extension Standalone** - Manual content extraction via popup UI
 
-**Using the HTTP API:**
-```bash
-# Start the HTTP server (automatically binds to localhost only for security)
-uv run chrome_tab_http_server.py
+## Quick Start (MCP + Extension)
 
-# Test it
-curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8888/api/health
-```
+The recommended setup uses the MCP server with browser extension for AI-powered content analysis.
 
-**Using the MCP Server (with Ollama):**
-```bash
-# Required environment variables
-export OLLAMA_BASE_URL="http://localhost:11434"
-export OLLAMA_MODEL="llama2"
+### Prerequisites
 
-# Start the MCP server
-uv run chrome_tab_mcp_server.py --ollama-url $OLLAMA_BASE_URL --model $OLLAMA_MODEL
+- Chrome/Chromium browser
+- Python 3.8+
+- Ollama running locally
+- Node.js 20+ (for extension tests)
 
-# Or with authentication (if native host started with --require-auth)
-export BRIDGE_AUTH_TOKEN="your-token-here"
-uv run chrome_tab_mcp_server.py \
-  --ollama-url $OLLAMA_BASE_URL \
-  --model $OLLAMA_MODEL \
-  --bridge-auth-token $BRIDGE_AUTH_TOKEN
-```
-
-**Optional: Native Messaging Bridge with Authentication**
-```bash
-# Default (no auth required)
-python chrome_tab_native_host.py
-
-# With authentication enabled
-python chrome_tab_native_host.py --require-auth
-```
-
-**Key Environment Variables:**
-- `OLLAMA_BASE_URL` - URL of your Ollama server (e.g., `http://localhost:11434`)
-- `OLLAMA_MODEL` - Model to use (e.g., `llama2`, `qwen`)
-- `BRIDGE_AUTH_TOKEN` - Optional auth token for native bridge (get from extension popup)
-
-**Configuration Files:**
-- Linux: `~/.config/chrome-tab-reader/tokens.json`
-- macOS: `~/Library/Application Support/chrome-tab-reader/tokens.json`
-- Windows: `%APPDATA%\chrome-tab-reader\tokens.json`
-
----
-
-## Quick Start for New Setups
-
-First time setting up Chrome Tab Reader? Follow these steps:
-
-### 1. Install the Chrome Extension
+### 1. Install Extension
 
 ```bash
-# Install Node.js dependencies
-npm install
-
-# Load the extension in Chrome:
+# Load extension in Chrome
 # 1. Open chrome://extensions/
 # 2. Enable "Developer mode" (top right)
 # 3. Click "Load unpacked"
 # 4. Select the extension/ directory
 ```
 
-### 2. Get Your Access Token
+See [extension/SETUP.md](extension/SETUP.md) for detailed setup.
+
+### 2. Install Native Messaging Host
 
 ```bash
-# Click the extension icon in Chrome
-# Your access token is shown at the top
-# Click "Copy JSON" or "Download Config File"
+# Linux/macOS
+./install_native_host.sh <your-extension-id>
+
+# Windows
+.\install_native_host.ps1 <your-extension-id>
 ```
 
-### 3. Configure Token Authentication (if using HTTP API or authenticated bridge)
+See [NATIVE_MESSAGING_SETUP.md](NATIVE_MESSAGING_SETUP.md) for platform-specific instructions.
+
+### 3. Start MCP Server
 
 ```bash
-# The extension provides a ready-to-use tokens.json
-# Save it to the platform-specific location shown above, or use:
-./setup_token.sh
-```
-
-### 4. Install Python Dependencies
-
-```bash
-# Option A: Using uv (recommended)
-# uv handles dependencies automatically via PEP 723 inline metadata
-
-# Option B: Using pip
+# Install Python dependencies
 pip install -r requirements.txt
+
+# Start MCP server
+uv run chrome_tab_mcp_server.py --ollama-url http://localhost:11434 --model llama2
 ```
 
-### 5. Start Using It!
+### 4. Use with Claude Code
 
-Now jump to the **[Quick Start for Existing Setups](#quick-start-for-existing-setups)** above to start the services you need.
-
----
+The MCP server provides the `process_chrome_tab` tool for extracting and analyzing webpage content through Claude Code.
 
 ## Features
 
-- **Three-Phase Content Extraction:**
-  1. Trigger lazy-loading by simulating scroll
-  2. Wait for DOM stability (handles dynamic content)
-  3. Extract clean content with Readability.js
-
-- **Intelligent Content Cleaning:** Removes navigation, ads, and footer content
-- **Keyword Filtering:** Extract content between specific keywords
-- **Token-Based Access Control:** Secure HTTP API with bearer token authentication
-- **Browser Extension UI:** Simple popup interface for content extraction
-- **Cross-Platform:** Works on Windows, macOS, and Linux
+- **Three-Phase Content Extraction:** Lazy-loading detection, DOM stability waiting, Readability-based noise removal
+- **Cross-Platform:** Windows, macOS, Linux support via Native Messaging
+- **AI-Powered Analysis:** Integrates with local Ollama models
+- **Secure:** Local processing, no external data sharing
+- **Flexible:** Keyword filtering, custom prompts, multiple extraction strategies
 
 ## Components
 
-This repository contains three ways to access Chrome tab content:
+### 1. Browser Extension
 
-### 1. Chrome Extension (Recommended - Cross-platform)
-- Browser extension for Chrome/Chromium
-- Three-phase content extraction (lazy-loading, DOM stability, Readability.js)
-- Direct DOM access for reliable extraction
-- Generates secure access tokens for API authentication
-- Works on Windows, macOS, Linux
+Cross-platform Chrome/Chromium extension with sophisticated content extraction.
 
-### 2. HTTP Server (FastAPI)
-- REST API for programmatic access built with FastAPI
-- **Automatic OpenAPI 3.0 specification** generation from code
-- **Interactive API documentation** at `/docs` (Swagger UI) and `/redoc`
-- Endpoints for content extraction and tab navigation
-- **Token-based authentication** for security
-- Can be called from scripts, MCP server, or other tools
-- See: `chrome_tab_http_server.py`
+- Three-phase extraction (lazy-loading, DOM stability, Readability.js)
+- Native Messaging for direct MCP integration
+- Token generation for HTTP API access
+- **Docs:** [extension/README.md](extension/README.md) | [extension/ARCHITECTURE.md](extension/ARCHITECTURE.md) | [extension/SETUP.md](extension/SETUP.md)
 
-### 3. MCP Server (Cross-platform via Native Messaging)
-- Model Context Protocol server for Claude Code
-- **NEW:** Uses Chrome Native Messaging for direct extension communication
-- Cross-platform support (Windows, macOS, Linux)
-- Integrates with local Ollama AI models
-- Superior three-phase extraction via browser extension
-- See: `chrome_tab_mcp_server.py`, `README_MCP.md`, and `NATIVE_MESSAGING_SETUP.md`
-- Legacy AppleScript mode still available (macOS only)
+### 2. MCP Server
 
-## Quick Start
+Model Context Protocol server for Claude Code integration.
 
-### Extension Setup
+- Cross-platform via Native Messaging (Windows, macOS, Linux)
+- Legacy AppleScript mode (macOS only)
+- Ollama integration for AI analysis
+- **Docs:** [NATIVE_MESSAGING_SETUP.md](NATIVE_MESSAGING_SETUP.md)
+- **Code:** `chrome_tab_mcp_server.py`, `chrome_tab_native_host.py`
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+### 3. HTTP API Server (Optional)
 
-2. **Load the extension in Chrome:**
-   - Open Chrome and go to `chrome://extensions/`
-   - Enable "Developer mode" (top right)
-   - Click "Load unpacked"
-   - Select the `extension/` directory
-   - Extension should appear with a green checkmark
+FastAPI-based REST API for programmatic access.
 
-3. **Verify it works:**
-   - Navigate to any webpage (e.g., https://example.com)
-   - Click the extension icon
-   - Click "Extract Content"
-   - Content should appear in the popup
-
-### HTTP Server Setup (Optional)
-
-If you want to use the HTTP API:
-
-1. **Get your access token:**
-   - Click the extension icon
-   - Copy the access token shown at the top
-
-2. **Configure authentication:**
-   ```bash
-   ./setup_token.sh
-   # Or manually create the tokens.json file (see extension/docs for location)
-   ```
-
-3. **Start the HTTP server:**
-
-   **Option A - Using uv (recommended):**
-   ```bash
-   uv run chrome_tab_http_server.py
-   ```
-
-   **Option B - Using pip:**
-   ```bash
-   pip install -r requirements.txt
-   python chrome_tab_http_server.py
-   ```
-
-4. **Explore the API:**
-   - **Interactive Swagger UI:** http://localhost:8888/docs
-   - **ReDoc Documentation:** http://localhost:8888/redoc
-   - **OpenAPI Spec (JSON):** http://localhost:8888/openapi.json
-
-5. **Test it:**
-   ```bash
-   curl -H "Authorization: Bearer YOUR_TOKEN" \
-        http://localhost:8888/api/health
-   ```
+- OpenAPI 3.0 specification with Swagger UI
+- Token-based authentication
+- Direct extension communication
+- **Docs:** [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md)
+- **Code:** `chrome_tab_http_server.py`
 
 ## Testing
 
-### Automated Tests (Recommended)
-
-Run automated tests to verify the extension works correctly:
+### Automated Tests
 
 ```bash
 npm test
 ```
 
-This will:
-- ✅ Verify all extension files are present
-- ✅ Load the extension in Chrome
-- ✅ Test content extraction functionality
-- ✅ Test the UI and popup
+This runs comprehensive extension tests including installation, extraction, and UI validation.
 
-**Quick Start:** See [TESTING_QUICK_START.md](TESTING_QUICK_START.md)
+**Documentation:**
+- **Quick Start:** [tests/TESTING_QUICK_START.md](tests/TESTING_QUICK_START.md)
+- **Detailed Guide:** [tests/README.md](tests/README.md)
+- **Manual Testing:** [extension/TESTING.md](extension/TESTING.md) | [tests/BROWSER_EXTENSION_TESTING.md](tests/BROWSER_EXTENSION_TESTING.md)
 
-**Detailed Guide:** See [tests/README.md](tests/README.md)
+### CI/CD
 
-### Manual Testing
+Automated tests run on GitHub Actions for all PRs and pushes to main branches.
 
-For comprehensive manual testing, see:
-- `extension/TESTING.md` - Testing checklist
-- `BROWSER_EXTENSION_TESTING.md` - Detailed testing guide
-
-### Run Tests During Development
-
-```bash
-# Run all tests
-npm test
-
-# Run specific test suite
-npm run test:install
-npm run test:extraction
-npm run test:ui
-
-# Watch mode (re-run on changes)
-npm run test:watch
-```
-
-## Access Control
-
-**All HTTP API endpoints require Bearer token authentication.**
-
-The extension generates a unique cryptographic token on first install. This token must be configured in the HTTP server to allow API access.
-
-### Why Token Authentication?
-
-- Prevents unauthorized localhost access from malicious scripts
-- Allows multiple clients with different tokens
-- Easy to rotate if compromised
-- Industry-standard OAuth2 bearer token pattern
-
-### Setup Guide
-
-See **[ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md)** for detailed instructions.
-
-**Quick setup:**
-```bash
-./setup_token.sh
-```
-
-## Usage Examples
-
-### Using the Extension UI
-
-1. Click the extension icon
-2. Click "Extract Content"
-3. View extracted content in the popup
-
-### Using the HTTP API
-
-```bash
-# Get current tab info
-curl -H "Authorization: Bearer YOUR_TOKEN" \
-     http://localhost:8888/api/current_tab
-
-# Extract content from current tab
-curl -X POST \
-     -H "Authorization: Bearer YOUR_TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"action": "extract_current_tab", "strategy": "three-phase"}' \
-     http://localhost:8888/api/extract
-```
-
-### Using from Python
-
-```python
-import requests
-
-TOKEN = "your-token-here"
-headers = {
-    "Authorization": f"Bearer {TOKEN}",
-    "Content-Type": "application/json"
-}
-
-response = requests.post(
-    "http://localhost:8888/api/extract",
-    headers=headers,
-    json={"action": "extract_current_tab", "strategy": "three-phase"}
-)
-
-data = response.json()
-print(data['content'])
-```
-
-## Project Structure
-
-```
-chrome-tab-mcp/
-├── extension/              # Chrome extension files
-│   ├── manifest.json       # Extension manifest
-│   ├── content_script.js   # Content extraction logic
-│   ├── service_worker.js   # Background service worker (token gen)
-│   ├── popup.html          # Extension popup UI (shows token)
-│   ├── popup.js            # Popup logic
-│   └── lib/                # Third-party libraries
-│       ├── readability.min.js
-│       └── dompurify.min.js
-├── tests/                  # Automated tests
-│   ├── installation.test.js
-│   ├── extraction.test.js
-│   ├── ui.test.js
-│   └── test-utils.js
-├── chrome_tab_http_server.py  # HTTP API server (with auth)
-├── chrome_tab_mcp_server.py   # MCP server (macOS)
-├── setup_token.sh             # Token setup helper
-├── tokens.json.example        # Token config template
-└── package.json               # Node dependencies
-```
-
-## CI/CD
-
-This project includes automated testing via GitHub Actions:
-
-- **Push/PR to main branches**: Runs full test suite on Node.js 20
-- **Pull Requests**: Quick validation tests with summary in PR
-- **Manual trigger**: Can be run manually from Actions tab
-
-### Running Tests in CI
-
-Tests automatically run on:
-- Push to `main`, `master`, `develop`, or `claude/*` branches
-- Pull requests to `main` or `master`
-- Manual workflow dispatch
-
-The CI environment:
-- Installs Chromium automatically
-- Runs all 32 tests
-- Generates coverage reports
-- Uploads test artifacts
-
-View workflow runs in the [Actions tab](https://github.com/russellpierce/chrome-tab-mcp/actions).
-
-## Security
-
-- ✅ Token-based authentication on all API endpoints
-- ✅ Cryptographically random 256-bit tokens
-- ✅ Tokens stored securely in Chrome extension storage
-- ✅ Server validates tokens on every request
-- ✅ Support for multiple tokens (different clients)
-- ✅ Easy token rotation/regeneration
-
-See [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md) for security best practices.
-
-## Configuration Files
-
-- `~/.chrome-tab-reader/tokens.json` - Valid access tokens
-- `tokens.json.example` - Example configuration file
-- `chrome_tab_mcp_config.json` - MCP server configuration (Claude Code)
-
-## API Documentation
-
-Start the HTTP server and visit:
-```
-http://localhost:8888/
-```
+View workflow runs: [GitHub Actions](https://github.com/russellpierce/chrome-tab-mcp/actions)
 
 ## Platform Support
 
 | Component | Windows | macOS | Linux |
 |-----------|---------|-------|-------|
 | Chrome Extension | ✅ | ✅ | ✅ |
-| HTTP Server | ✅ | ✅ | ✅ |
 | MCP Server (Native Messaging) | ✅ | ✅ | ✅ |
-| MCP Server (Legacy AppleScript) | ❌ | ✅ | ❌ |
+| HTTP Server | ✅ | ✅ | ✅ |
+| Legacy AppleScript | ❌ | ✅ | ❌ |
 
-## Browser Support
-
-- ✅ Chrome (v88+)
-- ✅ Edge (Chromium-based)
-- ✅ Brave
-- ❌ Firefox (Manifest v3 differences)
-
-## Requirements
-
-- Node.js v20 or higher (LTS recommended)
-- Chrome/Chromium browser
-- npm v10 or higher (comes with Node.js)
-- Python 3.8+ (for HTTP/MCP servers)
+**Browser Support:** Chrome 88+, Edge (Chromium), Brave
 
 ## Documentation
 
-- **Extension Setup:** `extension/SETUP.md`
-- **Architecture:** `extension/ARCHITECTURE.md`
-- **Testing Guide:** `extension/TESTING.md`
-- **Test Documentation:** `tests/README.md`
-- **Quick Testing:** `TESTING_QUICK_START.md`
-- **Access Control:** `ACCESS_CONTROL_SETUP.md`
-- **MCP Server:** `README_MCP.md`
-- **Design Docs:** `BROWSER_EXTENSION_DESIGN.md`, `DESIGN.md`
+### Setup & Configuration
+- **Extension Setup:** [extension/SETUP.md](extension/SETUP.md)
+- **Native Messaging:** [NATIVE_MESSAGING_SETUP.md](NATIVE_MESSAGING_SETUP.md)
+- **HTTP API & Access Control:** [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md)
+
+### Architecture & Development
+- **Extension Architecture:** [extension/ARCHITECTURE.md](extension/ARCHITECTURE.md)
+- **Extension Development:** [extension/README.md](extension/README.md)
+
+### Testing
+- **Quick Start:** [tests/TESTING_QUICK_START.md](tests/TESTING_QUICK_START.md)
+- **Test Suite Documentation:** [tests/README.md](tests/README.md)
+- **Manual Testing:** [extension/TESTING.md](extension/TESTING.md)
+- **E2E Testing:** [tests/BROWSER_EXTENSION_TESTING.md](tests/BROWSER_EXTENSION_TESTING.md)
+- **Native Messaging Tests:** [tests/TESTING_NATIVE_MESSAGING.md](tests/TESTING_NATIVE_MESSAGING.md)
+
+## Project Structure
+
+```
+chrome-tab-mcp/
+├── extension/              # Browser extension
+│   ├── manifest.json
+│   ├── content_script.js
+│   ├── service_worker.js
+│   └── lib/               # Readability.js, DOMPurify
+├── tests/                 # Automated tests
+├── chrome_tab_mcp_server.py      # MCP server
+├── chrome_tab_native_host.py     # Native messaging bridge
+├── chrome_tab_http_server.py     # HTTP API server
+└── install_native_host.sh        # Setup script
+```
 
 ## Troubleshooting
 
-### Extension doesn't load
-- Check that all files exist in `extension/` directory
-- Look for errors in `chrome://extensions/`
-- Reload the extension after changes
+### Extension Issues
 
-### Tests fail
-- Ensure Chrome/Chromium is installed
-- Run `npm install` to install dependencies
-- See `tests/README.md` for detailed troubleshooting
+**Extension doesn't load:**
+- Verify all files exist in `extension/` directory
+- Check for errors in `chrome://extensions/`
+- Reload extension after changes
 
-### Content extraction doesn't work
-- Check browser console for errors
-- Verify Readability and DOMPurify are loaded
-- Try the "simple" strategy instead of "three-phase"
+**Content extraction fails:**
+- Check browser console for errors (F12)
+- Verify Readability.js and DOMPurify are loaded
+- Try "simple" strategy instead of "three-phase"
 
-### 401 Unauthorized Errors (HTTP API)
-- Verify token is correct (copy from extension popup)
-- Check `~/.chrome-tab-reader/tokens.json` contains your token
-- Restart HTTP server after updating tokens.json
-- Ensure `Authorization: Bearer YOUR_TOKEN` header format
+### MCP Server Issues
 
-### Extension Not Generating Token
-- Reload extension in chrome://extensions/
-- Check browser console (F12) for errors
-- Reinstall extension
+**Native messaging connection fails:**
+- Run installation script: `./install_native_host.sh <extension-id>`
+- Check logs: `tail -f ~/.chrome-tab-reader/native_host.log`
+- Verify extension ID in manifest matches your extension
+- See [NATIVE_MESSAGING_SETUP.md](NATIVE_MESSAGING_SETUP.md#troubleshooting)
+
+**Ollama errors:**
+- Ensure Ollama is running: `ollama list`
+- Check URL configuration: default is `http://localhost:11434`
+- Verify model is installed: `ollama pull llama2`
+
+### HTTP API Issues
+
+**401 Unauthorized:**
+- Get token from extension popup
+- Configure tokens.json (see [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md))
+- Restart HTTP server after updating tokens
+
+**See component-specific documentation for detailed troubleshooting.**
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run `npm test` to verify everything works
+4. Run `npm test` to verify
 5. Submit a pull request
 
 All tests must pass before merging.
+
+## Requirements
+
+- **Node.js:** v20+ (LTS recommended) - for extension tests
+- **Python:** 3.8+ - for MCP/HTTP servers
+- **Browser:** Chrome 88+, Edge (Chromium), or Brave
+- **Ollama:** For AI analysis (local installation)
 
 ## License
 
