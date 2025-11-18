@@ -50,6 +50,8 @@ case "$TEST_TYPE" in
         echo -e "${GREEN}Running CI-safe tests (no Chrome required)...${NC}"
         echo -e "${YELLOW}These tests can run in GitHub Actions, Claude Code, or locally${NC}"
         echo ""
+        # Hide test URLs from logs to reduce noise
+        export CHROME_TAB_LOG_EXCLUDE_URLS="example.com,test.local"
         echo -e "${BLUE}→ Unit Tests (HTTP Server)${NC}"
         uv run pytest tests/test_http_server.py -v
         echo ""
@@ -60,6 +62,8 @@ case "$TEST_TYPE" in
     unit)
         echo -e "${GREEN}Running unit tests...${NC}"
         echo ""
+        # Hide test URLs from logs to reduce noise
+        export CHROME_TAB_LOG_EXCLUDE_URLS="example.com,test.local"
         echo -e "${BLUE}→ Native Messaging Protocol Tests${NC}"
         uv run pytest tests/test_native_messaging.py -v -m "not integration and not e2e"
         echo ""
@@ -163,6 +167,8 @@ case "$TEST_TYPE" in
     all)
         echo -e "${GREEN}Running all tests...${NC}"
         echo ""
+        # Hide test URLs from logs to reduce noise
+        export CHROME_TAB_LOG_EXCLUDE_URLS="example.com,test.local"
 
         echo -e "${BLUE}1. Unit Tests - Native Messaging${NC}"
         uv run pytest tests/test_native_messaging.py -v -m "not integration and not e2e" || true

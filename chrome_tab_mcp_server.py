@@ -74,6 +74,30 @@ DEFAULT_SYSTEM_PROMPT = (
 BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = 8765
 
+# URL filtering for logs (configurable via environment variable)
+# Format: comma-separated list of URL patterns to exclude from logs
+# Example: CHROME_TAB_LOG_EXCLUDE_URLS="example.com,test.local"
+LOG_EXCLUDE_URLS = [
+    pattern.strip()
+    for pattern in os.getenv("CHROME_TAB_LOG_EXCLUDE_URLS", "").lower().split(",")
+    if pattern.strip()
+]
+
+
+def should_log_url(url: str | None) -> bool:
+    """Check if URL should be included in logs based on exclude patterns.
+
+    Args:
+        url: URL to check (can be None)
+
+    Returns:
+        bool: False if URL matches any exclude pattern, True otherwise
+    """
+    if not url or not LOG_EXCLUDE_URLS:
+        return True
+    url_lower = url.lower()
+    return not any(excluded in url_lower for excluded in LOG_EXCLUDE_URLS)
+
 
 class BridgeConnection:
     """Manages persistent connection to the native messaging bridge."""
@@ -182,7 +206,8 @@ class BridgeConnection:
             # Parse response
             response = json.loads(response_data.decode('utf-8').strip())
             logger.info(f"✓ Received response: status={response.get('status')}, content_length={len(response.get('content', ''))}")
-            logger.debug(f"Response details: title={response.get('title')}, url={response.get('url')}")
+            if should_log_url(response.get('url')):
+                logger.debug(f"Response details: title={response.get('title')}, url={response.get('url')}")
             return response
 
         except socket.timeout:
