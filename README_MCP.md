@@ -27,7 +27,7 @@ The Chrome Tab Reader MCP server enables AI assistants (like Claude Code) to:
 
 ### Why Use This MCP?
 
-**Cost Optimization**: Process large web pages with a local model (free/cheap) before sending summarized content to expensive cloud models like Claude.
+**Cost Optimization & Context Management**: Process large web pages with a local model (free/cheap) before sending summarized content to expensive cloud models like Claude.
 
 **Workflow**:
 ```
@@ -39,13 +39,19 @@ Local Ollama processes content (cheap/free)
     ↓
 MCP returns summary to Claude Code
     ↓
-Claude uses summary to answer user (saves tokens)
+Claude uses summary to answer user (saves tokens + keeps context clean)
 ```
 
-**Example Token Savings**:
-- Original webpage: 50,000 tokens
-- After local Ollama processing: 5,000 tokens
-- Savings: 90% reduction in tokens sent to Claude
+**Benefits**:
+- **Lower costs**: Significant token reduction for expensive cloud models
+- **Cleaner context**: Send only relevant information, not entire cluttered web pages
+- **Better answers**: Claude focuses on key facts, not ads and navigation
+- **Faster responses**: Smaller inputs process more quickly
+
+**Example**:
+- Original webpage: 50,000 tokens (entire article with ads, navigation, etc.)
+- After local Ollama processing: 5,000 tokens (key facts and Q&A)
+- Result: Substantial token savings + cleaner context window
 
 ---
 

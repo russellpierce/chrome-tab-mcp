@@ -8,14 +8,20 @@
 
 ## Why Use Chrome Tab Reader?
 
-**Problem:** Sending full web pages to Claude is expensive (high token costs).
+**Problem:** Sending full web pages to Claude is expensive and clutters your context window.
 
-**Solution:** Use a cheap local model (Ollama) to distill content first, then send the summary to Claude.
+**Solution:** Use a cheap local model (Ollama) to distill content first, then send only the summary to Claude.
 
-**Example Savings:**
-- Original webpage: 50,000 tokens
-- After local processing: 5,000 tokens
-- **90% token reduction** 💰
+**Benefits:**
+- **Lower token costs** - Significantly reduce tokens sent to expensive cloud models
+- **Cleaner context** - Keep your conversation focused on what matters
+- **Better responses** - Less noise means Claude focuses on relevant information
+- **Faster processing** - Smaller inputs mean quicker responses
+
+**Example:**
+- Original webpage: 50,000 tokens (entire article with ads, navigation, etc.)
+- After local processing: 5,000 tokens (key facts and Q&A)
+- Result: Substantial token reduction + cleaner context window
 
 ---
 
@@ -109,7 +115,8 @@ You should see all components connected. Then try:
 - **🤖 AI-Powered Content Distillation** - Process web pages with local Ollama before Claude
 - **📄 Three-Phase Extraction Pipeline** - Handles lazy-loading, dynamic content, and cleaning
 - **🔧 4 MCP Tools** - Extract, analyze, diagnose, and troubleshoot
-- **💰 Token Cost Optimization** - 90%+ reduction in tokens sent to expensive models
+- **💰 Token Cost Optimization** - Reduce tokens sent to expensive models and keep context clean
+- **🧹 Context Window Management** - Send only relevant information, not cluttered web pages
 - **🌐 Cross-Platform** - Windows, macOS, Linux
 
 ### Three-Phase Content Extraction
