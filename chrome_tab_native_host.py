@@ -22,36 +22,93 @@ Authentication (Optional):
 Reference: https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging
 """
 
+# Emergency logging to stderr FIRST before any imports that might fail
 import sys
-import json
-import struct
-import logging
-import socket
-import threading
-import os
-import time
-import argparse
-import platform
-from pathlib import Path
+import datetime
+
+def emergency_log(msg):
+    """Log to stderr immediately, bypassing all logging infrastructure"""
+    try:
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{timestamp}] EMERGENCY: {msg}", file=sys.stderr, flush=True)
+    except (BrokenPipeError, OSError):
+        # stderr is closed or broken - this is OK, just skip emergency logging
+        pass
+
+emergency_log("Native host starting...")
+emergency_log(f"Python version: {sys.version}")
+emergency_log(f"sys.executable: {sys.executable}")
+
+try:
+    import json
+    import struct
+    import logging
+    import socket
+    import threading
+    import os
+    import time
+    import argparse
+    import platform
+    from pathlib import Path
+    emergency_log("All imports successful")
+except Exception as e:
+    emergency_log(f"FATAL: Import failed: {e}")
+    sys.exit(1)
 
 # Configuration
 TCP_HOST = "127.0.0.1"
 TCP_PORT = 8765  # Port for MCP server to connect to
-LOG_DIR = Path.home() / ".chrome-tab-reader"
-LOG_DIR.mkdir(exist_ok=True)
-LOG_FILE = LOG_DIR / "native_host.log"
+
+try:
+    LOG_DIR = Path.home() / ".chrome-tab-reader"
+    emergency_log(f"Log directory: {LOG_DIR}")
+    LOG_DIR.mkdir(exist_ok=True)
+    emergency_log("Log directory created/verified")
+    LOG_FILE = LOG_DIR / "native_host.log"
+    emergency_log(f"Log file: {LOG_FILE}")
+except Exception as e:
+    emergency_log(f"FATAL: Failed to create log directory: {e}")
+    # Fall back to /tmp or current directory
+    LOG_FILE = Path("/tmp/chrome_tab_native_host.log") if os.path.exists("/tmp") else Path("native_host.log")
+    emergency_log(f"Using fallback log file: {LOG_FILE}")
 
 # Authentication configuration (populated by command-line args)
 REQUIRE_AUTH = False
 VALID_TOKENS = set()
 
-# Set up logging
-logging.basicConfig(
-    filename=str(LOG_FILE),
-    level=logging.DEBUG,
-    format='[%(asctime)s] %(levelname)s: %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Set up dual logging (file + stderr for Chrome to capture)
+try:
+    emergency_log("Setting up logging infrastructure...")
+
+    class DualHandler(logging.Handler):
+        """Log to both file and stderr"""
+        def __init__(self, filename):
+            super().__init__()
+            self.file_handler = logging.FileHandler(filename)
+            self.stream_handler = logging.StreamHandler(sys.stderr)
+            formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s')
+            self.file_handler.setFormatter(formatter)
+            self.stream_handler.setFormatter(formatter)
+
+        def emit(self, record):
+            try:
+                self.file_handler.emit(record)
+                self.stream_handler.emit(record)
+                # Flush immediately to ensure logs appear
+                self.file_handler.flush()
+                self.stream_handler.flush()
+            except Exception as e:
+                emergency_log(f"Logging error: {e}")
+
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    logger.addHandler(DualHandler(str(LOG_FILE)))
+    logger.propagate = False
+    emergency_log("Logging infrastructure ready")
+    logger.info("=== Logger initialized successfully ===")
+except Exception as e:
+    emergency_log(f"FATAL: Failed to set up logging: {e}")
+    sys.exit(1)
 
 # Global state
 extension_connected = False
@@ -302,8 +359,11 @@ def handle_mcp_client(client_socket):
 def socket_server_thread():
     """
     Run a TCP server to accept connections from MCP server.
+    If port is already in use, exits gracefully (another instance has the server).
     """
     global extension_connected
+
+    emergency_log(f"Starting TCP server thread...")
 
     # Create TCP socket
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -312,16 +372,23 @@ def socket_server_thread():
     try:
         server.bind((TCP_HOST, TCP_PORT))
         server.listen(5)
-        logger.info(f"TCP server listening on {TCP_HOST}:{TCP_PORT}")
+        logger.info(f"✓ TCP server listening on {TCP_HOST}:{TCP_PORT}")
+        emergency_log(f"TCP server bound successfully to {TCP_HOST}:{TCP_PORT}")
     except OSError as e:
-        logger.error(f"Failed to bind to {TCP_HOST}:{TCP_PORT}: {e}")
-        logger.error("Is another instance already running?")
-        return
+        if e.errno == 98 or "Address already in use" in str(e):  # errno 98 = Address already in use
+            logger.info(f"TCP port {TCP_PORT} already in use - another native host instance is handling TCP")
+            emergency_log(f"TCP port {TCP_PORT} already in use - this is OK, another instance has the server")
+            return
+        else:
+            logger.error(f"Failed to bind to {TCP_HOST}:{TCP_PORT}: {e}")
+            emergency_log(f"FATAL: Failed to bind TCP server: {e}")
+            return
 
     try:
         while True:
+            logger.debug(f"Waiting for MCP client connection...")
             client_socket, client_addr = server.accept()
-            logger.info(f"MCP client connected from {client_addr}")
+            logger.info(f"✓ MCP client connected from {client_addr}")
 
             # Handle client in a new thread
             client_thread = threading.Thread(target=handle_mcp_client, args=(client_socket,))
@@ -330,41 +397,50 @@ def socket_server_thread():
 
     except Exception as e:
         logger.error(f"TCP server error: {e}", exc_info=True)
+        emergency_log(f"TCP server crashed: {e}")
     finally:
         server.close()
+        logger.info("TCP server shut down")
 
 
 def extension_message_loop():
     """
     Main loop: Process messages from Chrome extension.
+    Exits when Chrome disconnects (Chrome will launch a new instance if needed).
     """
     global extension_connected
 
-    logger.info("Extension message loop started")
+    logger.info("✓ Extension message loop started")
+    emergency_log("Extension message loop started, waiting for messages...")
     extension_connected = True
 
     try:
+        message_count = 0
         while True:
             # Read message from extension
+            logger.debug("Waiting for next message from Chrome...")
             message = read_message()
 
             if message is None:
-                logger.info("Extension disconnected")
+                logger.info("Chrome extension disconnected")
+                emergency_log("Chrome disconnected - native host will exit")
                 extension_connected = False
                 break
+
+            message_count += 1
+            logger.info(f"✓ Message #{message_count} from extension: {message.get('action', 'unknown')}")
 
             # Check if this is a response to a pending request
             request_id = message.get('request_id')
             if request_id and request_id in pending_requests:
-                # This is a response to a pending request
-                logger.info(f"Received response for request {request_id}")
+                logger.info(f"✓ Matched response to request {request_id}")
                 pending_requests[request_id].append(message)
             else:
-                # Unsolicited message from extension (e.g., notification)
-                logger.info(f"Unsolicited message from extension: {message}")
+                logger.warning(f"Received unsolicited message (no pending request): {message}")
 
     except Exception as e:
         logger.error(f"Error in extension message loop: {e}", exc_info=True)
+        emergency_log(f"Extension message loop crashed: {e}")
         extension_connected = False
 
 
@@ -374,53 +450,86 @@ def main():
     """
     global REQUIRE_AUTH, VALID_TOKENS
 
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(
-        description="Chrome Tab Reader - Native Messaging Host",
-        epilog="Bridges communication between Chrome extension and MCP server via TCP"
-    )
-    parser.add_argument(
-        "--require-auth",
-        action="store_true",
-        help="Require authentication for TCP connections (default: disabled for backward compatibility)"
-    )
-    args = parser.parse_args()
-
-    REQUIRE_AUTH = args.require_auth
-
-    logger.info("=== Native Messaging Host Starting ===")
-    logger.info(f"Python version: {sys.version}")
-    logger.info(f"PID: {os.getpid()}")
-    logger.info(f"TCP: {TCP_HOST}:{TCP_PORT}")
-    logger.info(f"Authentication: {'REQUIRED' if REQUIRE_AUTH else 'DISABLED'}")
-    logger.info(f"Log file: {LOG_FILE}")
-
-    # Load tokens if authentication is required
-    if REQUIRE_AUTH:
-        VALID_TOKENS = load_valid_tokens()
-        if not VALID_TOKENS:
-            logger.error("Authentication is required but no tokens are configured!")
-            logger.error("Please add tokens to tokens.json or disable authentication")
-            sys.exit(1)
-
     try:
-        # Start TCP server in background thread
-        socket_thread = threading.Thread(target=socket_server_thread)
-        socket_thread.daemon = True
-        socket_thread.start()
+        emergency_log("main() function started")
 
-        logger.info("TCP server started, waiting for extension connection...")
+        # Parse command-line arguments
+        emergency_log("Parsing command-line arguments...")
+        parser = argparse.ArgumentParser(
+            description="Chrome Tab Reader - Native Messaging Host",
+            epilog="Bridges communication between Chrome extension and MCP server via TCP"
+        )
+        parser.add_argument(
+            "--require-auth",
+            action="store_true",
+            help="Require authentication for TCP connections (default: disabled for backward compatibility)"
+        )
+        args = parser.parse_args()
+        emergency_log(f"Arguments parsed: require_auth={args.require_auth}")
 
-        # Run extension message loop in main thread
-        extension_message_loop()
+        REQUIRE_AUTH = args.require_auth
 
-    except KeyboardInterrupt:
-        logger.info("Interrupted by user")
+        logger.info("=== Native Messaging Host Starting ===")
+        logger.info(f"Python version: {sys.version}")
+        logger.info(f"PID: {os.getpid()}")
+        logger.info(f"TCP: {TCP_HOST}:{TCP_PORT}")
+        logger.info(f"Authentication: {'REQUIRED' if REQUIRE_AUTH else 'DISABLED'}")
+        logger.info(f"Log file: {LOG_FILE}")
+        emergency_log(f"Main initialization complete, PID={os.getpid()}")
+
+        # Load tokens if authentication is required
+        if REQUIRE_AUTH:
+            emergency_log("Loading authentication tokens...")
+            VALID_TOKENS = load_valid_tokens()
+            if not VALID_TOKENS:
+                logger.error("Authentication is required but no tokens are configured!")
+                emergency_log("FATAL: No tokens configured but auth is required")
+                logger.error("Please add tokens to tokens.json or disable authentication")
+                sys.exit(1)
+            logger.info(f"Loaded {len(VALID_TOKENS)} authentication token(s)")
+
+        try:
+            # Start TCP server in background thread
+            emergency_log("Starting TCP server thread...")
+            socket_thread = threading.Thread(target=socket_server_thread, name="TCPServer")
+            socket_thread.daemon = True
+            socket_thread.start()
+            logger.info("✓ TCP server thread started")
+            emergency_log("TCP server thread launched")
+
+            # Give TCP server a moment to bind
+            time.sleep(0.5)
+
+            # Run extension message loop in main thread
+            emergency_log("Starting extension message loop...")
+            extension_message_loop()
+            emergency_log("Extension message loop exited normally")
+
+        except KeyboardInterrupt:
+            logger.info("Interrupted by user")
+            emergency_log("Interrupted by user (Ctrl+C)")
+        except Exception as e:
+            logger.error(f"Unexpected error in main loop: {e}", exc_info=True)
+            emergency_log(f"FATAL: Main loop crashed: {e}")
+            raise
+        finally:
+            logger.info("=== Native Messaging Host Stopped ===")
+            emergency_log("Native host shutting down")
+
     except Exception as e:
-        logger.error(f"Unexpected error: {e}", exc_info=True)
-    finally:
-        logger.info("=== Native Messaging Host Stopped ===")
+        emergency_log(f"FATAL: Uncaught exception in main(): {e}")
+        import traceback
+        emergency_log(traceback.format_exc())
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    main()
+    emergency_log("Script __main__ executing")
+    try:
+        main()
+    except Exception as e:
+        emergency_log(f"FATAL: Exception escaped main(): {e}")
+        import traceback
+        emergency_log(traceback.format_exc())
+        sys.exit(1)
+    emergency_log("Script exiting normally")

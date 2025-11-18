@@ -56,3 +56,7 @@ coverage/
 # Logs
 *.log
 mcp_server.log
+
+# User-specific native messaging configuration
+chrome_tab_native_host.bat
+com.chrome_tab_reader.host.json
