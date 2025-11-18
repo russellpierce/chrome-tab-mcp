@@ -17,8 +17,19 @@ import time
 import socket
 import threading
 import re
+import sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright, expect
+
+# Add tests directory to path for importing e2e_native_host_manager
+sys.path.insert(0, str(Path(__file__).parent))
+from e2e_native_host_manager import (
+    backup_manifest,
+    restore_manifest,
+    add_test_extension_id,
+    remove_test_extension_id,
+    get_manifest_path
+)
 
 
 @pytest.fixture(scope="session")
@@ -105,6 +116,43 @@ def native_host_process(native_host_path):
     yield None
 
 
+class NativeHostTestManager:
+    """Context manager for safely managing native host configuration during E2E tests"""
+
+    def __init__(self, extension_id):
+        self.extension_id = extension_id
+        self.backup_created = False
+        self.extension_id_added = False
+
+    def __enter__(self):
+        """Setup: Backup manifest and add test extension ID"""
+        # Check if native host is installed
+        manifest_path = get_manifest_path()
+        if not manifest_path.exists():
+            raise FileNotFoundError(
+                f"Native messaging host not installed at {manifest_path}\n"
+                "Please run: python chrome_tab_native_host.py --install"
+            )
+
+        # Backup existing manifest
+        backup_manifest()
+        self.backup_created = True
+
+        # Add test extension ID to allowed origins
+        if add_test_extension_id(self.extension_id):
+            self.extension_id_added = True
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Teardown: Restore original manifest"""
+        if self.backup_created:
+            print("\nCleaning up E2E test configuration...")
+            restore_manifest()
+            print("✓ Native host configuration restored")
+        return False  # Don't suppress exceptions
+
+
 @pytest.mark.e2e
 class TestNativeMessagingE2E:
     """End-to-end tests with real Chrome browser and extension"""
@@ -171,7 +219,9 @@ class TestFullNativeMessagingFlow:
     def test_mcp_to_extension_extraction(self, extension_path):
         """Test full extraction flow from MCP server through to extension
 
-        This test loads the extension, gets its ID, and tests the full native messaging bridge.
+        This test loads the extension, gets its ID, safely updates the native
+        messaging host configuration, and tests the full bridge without
+        breaking the user's existing setup.
         """
         import tempfile
         user_data_dir = tempfile.mkdtemp(prefix="chrome-test-")
@@ -198,71 +248,79 @@ class TestFullNativeMessagingFlow:
 
             print(f"✓ Extension loaded with ID: {extension_id}")
 
-            # Navigate to test page
-            page.goto("https://example.com")
-            page.wait_for_load_state("networkidle")
-
-            # Wait for native host connection to establish
-            time.sleep(3)
-
-            # Try to connect to TCP bridge
-            bridge_host = "127.0.0.1"
-            bridge_port = 8765
-
+            # Setup native host with test extension ID (will restore on exit)
             try:
-                # Connect to TCP bridge
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(10)
-                sock.connect((bridge_host, bridge_port))
+                with NativeHostTestManager(extension_id):
+                    print("✓ Native host configured for test (original config backed up)")
 
-                # Send extraction request
-                request = {
-                    "action": "extract_current_tab",
-                    "strategy": "three-phase"
-                }
-                sock.sendall((json.dumps(request) + '\n').encode('utf-8'))
+                    # Navigate to test page
+                    page.goto("https://example.com")
+                    page.wait_for_load_state("networkidle")
 
-                # Receive response
-                response_data = b''
-                while True:
-                    chunk = sock.recv(4096)
-                    if not chunk:
-                        break
-                    response_data += chunk
-                    if b'\n' in response_data:
-                        break
+                    # Wait for native host connection to establish
+                    time.sleep(3)
 
-                sock.close()
+                    # Try to connect to TCP bridge
+                    bridge_host = "127.0.0.1"
+                    bridge_port = 8765
 
-                # Verify response
-                if response_data:
-                    response = json.loads(response_data.decode('utf-8').strip())
-                    assert response.get("status") == "success", f"Extraction failed: {response.get('error')}"
-                    assert "content" in response
-                    assert len(response["content"]) > 0
-                    print(f"✓ Extracted {len(response['content'])} characters from {response.get('url')}")
-                else:
-                    pytest.skip("No response from native host")
+                    try:
+                        # Connect to TCP bridge
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(10)
+                        sock.connect((bridge_host, bridge_port))
 
-            except ConnectionRefusedError:
+                        # Send extraction request
+                        request = {
+                            "action": "extract_current_tab",
+                            "strategy": "three-phase"
+                        }
+                        sock.sendall((json.dumps(request) + '\n').encode('utf-8'))
+
+                        # Receive response
+                        response_data = b''
+                        while True:
+                            chunk = sock.recv(4096)
+                            if not chunk:
+                                break
+                            response_data += chunk
+                            if b'\n' in response_data:
+                                break
+
+                        sock.close()
+
+                        # Verify response
+                        if response_data:
+                            response = json.loads(response_data.decode('utf-8').strip())
+                            assert response.get("status") == "success", f"Extraction failed: {response.get('error')}"
+                            assert "content" in response
+                            assert len(response["content"]) > 0
+                            print(f"✓ Extracted {len(response['content'])} characters from {response.get('url')}")
+                        else:
+                            pytest.skip("No response from native host")
+
+                    except ConnectionRefusedError:
+                        pytest.skip(
+                            f"Native messaging bridge is not running on {bridge_host}:{bridge_port}. "
+                            "Please ensure:\n"
+                            "1. Chrome extension is installed\n"
+                            "2. Native messaging host is installed\n"
+                            "3. Chrome is running with the extension loaded"
+                        )
+                    except Exception as e:
+                        pytest.skip(f"Could not connect to native host: {e}")
+
+            except FileNotFoundError as e:
                 browser.close()
-                pytest.skip(
-                    f"Native messaging bridge is not running on {bridge_host}:{bridge_port}. "
-                    "Please ensure:\n"
-                    "1. Chrome extension is installed\n"
-                    "2. Native messaging host is installed\n"
-                    "3. Chrome is running with the extension loaded"
-                )
-            except Exception as e:
+                pytest.skip(str(e))
+            finally:
                 browser.close()
-                pytest.skip(f"Could not connect to native host: {e}")
-
-            browser.close()
 
     def test_mcp_server_process_chrome_tab(self, extension_path):
         """Test the process_chrome_tab function with real Chrome
 
-        This test verifies the MCP server can extract tab content via the extension.
+        This test verifies the MCP server can extract tab content via the extension
+        without breaking the user's existing native messaging host setup.
         """
         import tempfile
         user_data_dir = tempfile.mkdtemp(prefix="chrome-test-")
@@ -289,38 +347,44 @@ class TestFullNativeMessagingFlow:
 
             print(f"✓ Extension loaded with ID: {extension_id}")
 
-            # Navigate to test page
-            page.goto("https://example.com")
-            page.wait_for_load_state("networkidle")
-
-            # Wait for native host connection
-            time.sleep(3)
-
-            # Import and test MCP server function
+            # Setup native host with test extension ID (will restore on exit)
             try:
-                from chrome_tab_mcp_server import extract_tab_content_via_extension
+                with NativeHostTestManager(extension_id):
+                    print("✓ Native host configured for test (original config backed up)")
 
-                result = extract_tab_content_via_extension()
+                    # Navigate to test page
+                    page.goto("https://example.com")
+                    page.wait_for_load_state("networkidle")
 
-                if result.get("status") == "success":
-                    assert "content" in result
-                    assert "title" in result
-                    assert "url" in result
-                    assert len(result["content"]) > 0
-                    print(f"✓ Successfully extracted content from {result['url']}")
-                else:
-                    error_msg = result.get('error', 'Unknown error')
-                    browser.close()
-                    pytest.skip(f"Extraction failed: {error_msg}")
+                    # Wait for native host connection
+                    time.sleep(3)
 
-            except ImportError as e:
+                    # Import and test MCP server function
+                    try:
+                        from chrome_tab_mcp_server import extract_tab_content_via_extension
+
+                        result = extract_tab_content_via_extension()
+
+                        if result.get("status") == "success":
+                            assert "content" in result
+                            assert "title" in result
+                            assert "url" in result
+                            assert len(result["content"]) > 0
+                            print(f"✓ Successfully extracted content from {result['url']}")
+                        else:
+                            error_msg = result.get('error', 'Unknown error')
+                            pytest.skip(f"Extraction failed: {error_msg}")
+
+                    except ImportError as e:
+                        pytest.skip(f"MCP server module not available: {e}")
+                    except Exception as e:
+                        pytest.skip(f"Unexpected error: {e}")
+
+            except FileNotFoundError as e:
                 browser.close()
-                pytest.skip(f"MCP server module not available: {e}")
-            except Exception as e:
+                pytest.skip(str(e))
+            finally:
                 browser.close()
-                pytest.skip(f"Unexpected error: {e}")
-
-            browser.close()
 
 
 if __name__ == "__main__":
