@@ -656,12 +656,17 @@ def main():
     logger.info("")
 
     if not connection_ok:
-        logger.warning("⚠ WARNING: Ollama connection test failed!")
-        logger.warning("  The MCP server will start, but requests may fail.")
-        logger.warning("  Please check:")
-        logger.warning(f"    1. Ollama is running at {OLLAMA_BASE_URL}")
-        logger.warning(f"    2. Model '{MODEL}' is available (try: ollama run {MODEL})")
-        logger.warning("")
+        logger.error("✗ FATAL: Ollama connection test failed!")
+        logger.error("  Cannot start MCP server without working Ollama connection.")
+        logger.error("  Please check:")
+        logger.error(f"    1. Ollama is running at {OLLAMA_BASE_URL}")
+        logger.error(f"    2. Model '{MODEL}' is available (try: ollama run {MODEL})")
+        logger.error("")
+        raise RuntimeError(
+            f"Failed to connect to Ollama server at {OLLAMA_BASE_URL} with model '{MODEL}'. "
+            f"The MCP server requires a working Ollama connection to function. "
+            f"Please ensure Ollama is running and the model is available."
+        )
 
     logger.info("=== MCP Server Ready ===")
     logger.info("")
