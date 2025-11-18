@@ -19,20 +19,17 @@ import pytest
 import json
 import struct
 import socket
-import subprocess
 import time
 import threading
 from pathlib import Path
-from unittest.mock import Mock, patch
-import tempfile
+from unittest.mock import patch
 import sys
-import os
 import io
 
 # Add parent directory to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from chrome_tab_native_host import read_message, send_message, TCP_HOST, TCP_PORT
+from chrome_tab_native_host import read_message, send_message
 
 
 @pytest.mark.unit

@@ -173,8 +173,8 @@ def read_message():
     except ValueError as e:
         logger.error(f"Error reading message: {e}")
         return None
-    except Exception as e:
-        logger.exception(f"Unexpected error reading message")
+    except Exception:
+        logger.exception("Unexpected error reading message")
         return None
 
 
@@ -390,7 +390,7 @@ def socket_server_thread():
     """
     global extension_connected
 
-    emergency_log(f"Starting TCP server thread...")
+    emergency_log("Starting TCP server thread...")
 
     # Create TCP socket
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -413,7 +413,7 @@ def socket_server_thread():
 
     try:
         while True:
-            logger.debug(f"Waiting for MCP client connection...")
+            logger.debug("Waiting for MCP client connection...")
             client_socket, client_addr = server.accept()
             logger.info(f"✓ MCP client connected from {client_addr}")
 

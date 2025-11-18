@@ -92,7 +92,7 @@ def backup_manifest():
     _backup_path_to_restore = backup_path
 
     print(f"✓ Backed up manifest to {backup_path}")
-    print(f"✓ Emergency restore registered (will run on exit/crash)")
+    print("✓ Emergency restore registered (will run on exit/crash)")
 
     return backup_path
 
@@ -116,7 +116,7 @@ def restore_manifest():
     # Clear global flag so emergency restore doesn't try to restore again
     _backup_path_to_restore = None
 
-    print(f"✓ Restored original manifest from backup")
+    print("✓ Restored original manifest from backup")
 
     return True
 
