@@ -120,10 +120,10 @@ Verify Readability output is cleaner than innerText.
 
 ```
 [ ] Waits for content to stabilize
-[ ] Doesn't wait forever (respects 3-minute timeout)
+[ ] Doesn't wait forever (respects 30-second timeout)
 [ ] On static page: exits in <1 second
 [ ] On animated page: waits 2-3 seconds for stabilization
-[ ] Hard timeout at 3 minutes prevents infinite wait
+[ ] Hard timeout at 30 seconds prevents infinite wait
 ```
 
 #### T2.4: Single-Page App Support
@@ -285,7 +285,7 @@ console.log(`Phase took ${phaseEnd - phaseStart}ms`);
 **Targets:**
 ```
 Phase 1 (lazy-loading): < 5 seconds
-Phase 2 (DOM stability): < 3 minutes (typically 0.5-2 sec)
+Phase 2 (DOM stability): < 30 seconds (typically 0.5-2 sec)
 Phase 3 (readability): < 1 second
 Total: < 10 seconds (not counting Ollama)
 ```
@@ -539,7 +539,7 @@ python chrome_tab_mcp_server.py --ollama-url http://localhost:11434 --model llam
 
 **Cause:** DOM stability timeout reached
 
-**Expected:** This is normal. Extraction waits up to 3 minutes for dynamic content. If page keeps changing, it uses hard timeout.
+**Expected:** This is normal. Extraction waits up to 30 seconds for dynamic content. If page keeps changing, it uses hard timeout.
 
 **Workaround:** Navigate to more stable pages, or reduce timeout in code if needed.
 

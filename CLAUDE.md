@@ -94,10 +94,10 @@ User/Claude Code
 - Handles infinite scroll, "Load More" buttons, lazy images
 - Scrolls to bottom up to 5 times, checking for new content
 
-**Phase 2: Wait for DOM Stability (up to 3 min)**
+**Phase 2: Wait for DOM Stability (up to 30 sec)**
 - Uses MutationObserver to detect when DOM stops changing
 - Resolves when no changes for 2 consecutive seconds
-- Hard timeout at 3 minutes
+- Hard timeout at 30 seconds
 - Handles SPAs (React/Vue), live feeds, dynamic forms
 
 **Phase 3: Extract with Readability.js**
@@ -662,7 +662,7 @@ uvicorn chrome_tab_http_server:app --reload
 - Readability.js crashes on malformed HTML
 
 **Solution:**
-- Phase 2 has hard timeout (3 minutes) - will exit eventually
+- Phase 2 has hard timeout (30 seconds) - will exit eventually
 - Fallback to `immediate` strategy for problematic sites
 - Fallback to `document.body.innerText` if Readability fails
 

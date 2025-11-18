@@ -289,7 +289,7 @@ async function triggerLazyLoading(maxScrolls = 5, scrollDelay = 500) {
  * Phase 2: Wait for DOM Stability
  * Uses MutationObserver to detect when dynamic content stops loading
  */
-async function waitForDOMStability(timeoutMs = 180000, stabilityDelayMs = 2000) {
+async function waitForDOMStability(timeoutMs = 30000, stabilityDelayMs = 2000) {
     console.log("[Chrome Tab Reader] Phase 2: Waiting for DOM stability...");
 
     return new Promise((resolve) => {

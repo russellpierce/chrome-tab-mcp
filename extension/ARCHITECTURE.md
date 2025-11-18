@@ -232,14 +232,14 @@ async function triggerLazyLoading() {
 - Pagination "Load More" buttons
 - Lazy-loaded image galleries
 
-### Phase 2: Wait for DOM Stability (up to 3 minutes)
+### Phase 2: Wait for DOM Stability (up to 30 seconds)
 
 Uses MutationObserver to detect when dynamic content stops loading:
 
 ```javascript
-async function waitForDOMStability(timeoutMs = 180000) {
+async function waitForDOMStability(timeoutMs = 30000) {
     // Resolves when DOM hasn't changed for 2 seconds
-    // Hard timeout at 3 minutes
+    // Hard timeout at 30 seconds
 
     return new Promise((resolve) => {
         let stableTimer;
@@ -261,7 +261,7 @@ async function waitForDOMStability(timeoutMs = 180000) {
             attributeFilter: ['src', 'href', 'data-src']
         });
 
-        // Hard timeout after 3 minutes
+        // Hard timeout after 30 seconds
         setTimeout(() => {
             observer.disconnect();
             resolve();
@@ -497,7 +497,7 @@ Finally: Return aggregated analysis to Claude Code
 | Error | Handling |
 |-------|----------|
 | Lazy-loading fails | Continue to DOM stability phase |
-| DOM stability timeout | Exit at 3 minutes and extract anyway |
+| DOM stability timeout | Exit at 30 seconds and extract anyway |
 | Readability fails | Fallback to `document.body.innerText` |
 | MCP server offline | Show user-friendly error message |
 | Large content | Send anyway (HTTP POST handles large payloads) |
