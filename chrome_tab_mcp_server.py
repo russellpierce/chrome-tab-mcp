@@ -25,6 +25,7 @@ import json
 import socket
 import platform
 import logging
+import time
 from pathlib import Path
 
 # Load environment variables from .env file
@@ -43,6 +44,12 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Ensure logs are flushed immediately
+for handler in logging.getLogger().handlers:
+    handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s'))
+    if isinstance(handler, logging.StreamHandler):
+        handler.stream.reconfigure(line_buffering=True) if hasattr(handler.stream, 'reconfigure') else None
 
 # Configuration - must be provided via command-line args or environment variables
 # These will be validated and set in main()
@@ -505,13 +512,109 @@ def find_extension_id() -> str:
         return "\n".join(output)
 
 
+def test_ollama_connection(ollama_url: str, model: str, timeout: int = 120) -> bool:
+    """Test connection to Ollama server with a simple query.
+
+    Args:
+        ollama_url: Base URL of the Ollama server
+        model: Model name to test
+        timeout: Timeout in seconds (default: 120 seconds / 2 minutes)
+
+    Returns:
+        bool: True if connection successful, False otherwise
+    """
+    logger.info(f"Testing Ollama connection at {ollama_url} with model '{model}'...")
+    logger.info(f"  Timeout: {timeout} seconds ({timeout // 60} minutes)")
+
+    start_time = time.time()
+
+    try:
+        # Send a minimal test query
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "user", "content": "Hello"}
+            ],
+            "temperature": 0,
+            "stream": False,
+            "max_tokens": 5
+        }
+
+        logger.debug(f"Sending test request to {ollama_url}/v1/chat/completions")
+        logger.info(f"  → Waiting for Ollama to respond (this may take time if model needs to load)...")
+        sys.stderr.flush()  # Ensure log is visible immediately
+
+        response = requests.post(
+            f"{ollama_url}/v1/chat/completions",
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=timeout
+        )
+
+        elapsed = time.time() - start_time
+        logger.info(f"  → Received HTTP response after {elapsed:.1f} seconds")
+        sys.stderr.flush()
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        if "choices" in data and len(data["choices"]) > 0:
+            elapsed = time.time() - start_time
+            logger.info(f"✓ Ollama connection test SUCCESSFUL (completed in {elapsed:.1f} seconds)")
+            logger.info(f"  Model '{model}' is responding correctly")
+            sys.stderr.flush()
+            return True
+        else:
+            logger.warning(f"✗ Ollama connection test FAILED: No choices in response")
+            logger.warning(f"  Response: {data}")
+            sys.stderr.flush()
+            return False
+
+    except requests.exceptions.ConnectionError as e:
+        elapsed = time.time() - start_time
+        logger.error(f"✗ Ollama connection test FAILED after {elapsed:.1f} seconds: Cannot connect to {ollama_url}")
+        logger.error(f"  Error: {str(e)}")
+        logger.error(f"  Make sure Ollama is running and accessible at {ollama_url}")
+        sys.stderr.flush()
+        return False
+    except requests.exceptions.Timeout:
+        logger.error(f"✗ Ollama connection test FAILED: Timeout after {timeout} seconds")
+        logger.error(f"  The model '{model}' may not be loaded or the server is too slow")
+        logger.error(f"  Try: ollama run {model}")
+        sys.stderr.flush()
+        return False
+    except requests.exceptions.HTTPError as e:
+        elapsed = time.time() - start_time
+        logger.error(f"✗ Ollama connection test FAILED after {elapsed:.1f} seconds: HTTP {e.response.status_code}")
+        if hasattr(e.response, 'text'):
+            logger.error(f"  Response: {e.response.text}")
+        sys.stderr.flush()
+        return False
+    except json.JSONDecodeError as e:
+        elapsed = time.time() - start_time
+        logger.error(f"✗ Ollama connection test FAILED after {elapsed:.1f} seconds: Invalid JSON response")
+        logger.error(f"  Error: {str(e)}")
+        sys.stderr.flush()
+        return False
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(f"✗ Ollama connection test FAILED after {elapsed:.1f} seconds: Unexpected error")
+        logger.error(f"  Error: {str(e)}", exc_info=True)
+        sys.stderr.flush()
+        return False
+
+
 def main():
     """Parse command-line arguments and validate configuration."""
+    startup_time = time.time()
+
     logger.info("=== Chrome Tab Reader MCP Server Starting ===")
     logger.info(f"Python version: {sys.version}")
     logger.info(f"Platform: {platform.system()} {platform.release()}")
     logger.info(f"PID: {os.getpid()}")
     logger.info(f"Log file: {LOG_FILE}")
+    sys.stderr.flush()
 
     parser = argparse.ArgumentParser(
         description="Chrome Tab Reader MCP Server",
@@ -577,10 +680,46 @@ def main():
     logger.info(f"  Model: {MODEL}")
     logger.info(f"  Bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")
     logger.info(f"  Bridge Auth: {'ENABLED' if BRIDGE_AUTH_TOKEN else 'DISABLED'}")
-    logger.info("=== MCP Server Ready ===")
     logger.info("")
+    sys.stderr.flush()
+
+    # Test Ollama connection before starting server
+    logger.info("=== Testing Ollama Connection ===")
+    logger.info("NOTE: This may take up to 2 minutes if the model needs to be loaded into memory")
+    sys.stderr.flush()
+
+    test_start = time.time()
+    connection_ok = test_ollama_connection(OLLAMA_BASE_URL, MODEL, timeout=120)
+    test_elapsed = time.time() - test_start
+
+    logger.info(f"Connection test completed in {test_elapsed:.1f} seconds")
+    logger.info("")
+    sys.stderr.flush()
+
+    if not connection_ok:
+        logger.error("✗ FATAL: Ollama connection test failed!")
+        logger.error("  Cannot start MCP server without working Ollama connection.")
+        logger.error("  Please check:")
+        logger.error(f"    1. Ollama is running at {OLLAMA_BASE_URL}")
+        logger.error(f"    2. Model '{MODEL}' is available (try: ollama run {MODEL})")
+        logger.error("")
+        raise RuntimeError(
+            f"Failed to connect to Ollama server at {OLLAMA_BASE_URL} with model '{MODEL}'. "
+            f"The MCP server requires a working Ollama connection to function. "
+            f"Please ensure Ollama is running and the model is available."
+        )
+
+    total_elapsed = time.time() - startup_time
+    logger.info("=== MCP Server Ready ===")
+    logger.info(f"Total startup time: {total_elapsed:.1f} seconds")
+    logger.info("")
+    sys.stderr.flush()
 
 
 if __name__ == "__main__":
     main()
+    logger.info("=== Starting MCP protocol handler (stdin/stdout) ===")
+    logger.info("Server will now listen for MCP requests on stdin")
+    logger.info("All further output goes to stderr or log file to avoid breaking MCP protocol")
+    sys.stderr.flush()
     mcp.run()
