@@ -1,6 +1,6 @@
 # CLAUDE.md - AI Assistant Development Guide
 
-> **Note:** This document is AI-authored with human oversight.
+> **Note:** This document is AI-authored with almost no human oversight.
 
 This guide helps AI assistants (like Claude Code) understand the Chrome Tab Reader codebase structure, development workflows, and conventions. It serves as a comprehensive reference for working effectively with this repository.
 
