@@ -24,10 +24,25 @@ import argparse
 import json
 import socket
 import platform
+import logging
 from pathlib import Path
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Set up logging
+LOG_DIR = Path(__file__).parent
+LOG_FILE = LOG_DIR / "mcp_server.log"
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    handlers=[
+        logging.FileHandler(str(LOG_FILE)),
+        logging.StreamHandler(sys.stderr)  # Also log to stderr for debugging
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Configuration - must be provided via command-line args or environment variables
 # These will be validated and set in main()
@@ -58,6 +73,9 @@ def get_chrome_extension_directories() -> list[Path]:
     home = Path.home()
     extension_dirs = []
 
+    logger.info(f"Searching for Chrome extension directories on {system}")
+    logger.debug(f"Home directory: {home}")
+
     if system == "Linux":
         # Chrome and Chromium on Linux
         base_dirs = [
@@ -73,18 +91,25 @@ def get_chrome_extension_directories() -> list[Path]:
     elif system == "Windows":
         # Windows
         local_appdata = Path(os.environ.get("LOCALAPPDATA", home / "AppData/Local"))
+        logger.debug(f"LOCALAPPDATA: {local_appdata}")
         base_dirs = [
             local_appdata / "Google/Chrome/User Data",
             local_appdata / "Chromium/User Data",
         ]
     else:
+        logger.warning(f"Unsupported platform: {system}")
         return []
+
+    logger.debug(f"Base directories to check: {base_dirs}")
 
     # Check each base directory for profiles
     for base_dir in base_dirs:
+        logger.debug(f"Checking base directory: {base_dir}")
         if not base_dir.exists():
+            logger.debug(f"  Base directory does not exist: {base_dir}")
             continue
 
+        logger.debug(f"  Base directory exists, scanning for profiles...")
         # Check Default profile and numbered profiles (Profile 1, Profile 2, etc.)
         for profile_dir in base_dir.iterdir():
             if not profile_dir.is_dir():
@@ -92,9 +117,14 @@ def get_chrome_extension_directories() -> list[Path]:
 
             # Look for Extensions subdirectory
             ext_dir = profile_dir / "Extensions"
+            logger.debug(f"    Checking profile: {profile_dir.name} → {ext_dir}")
             if ext_dir.exists() and ext_dir.is_dir():
+                logger.info(f"    ✓ Found Extensions directory: {ext_dir}")
                 extension_dirs.append(ext_dir)
+            else:
+                logger.debug(f"    ✗ No Extensions directory in: {profile_dir.name}")
 
+    logger.info(f"Total extension directories found: {len(extension_dirs)}")
     return extension_dirs
 
 
@@ -110,21 +140,26 @@ def detect_chrome_tab_reader_extension() -> dict:
             "error": str | None
         }
     """
+    logger.info("Starting Chrome Tab Reader extension detection")
     try:
         extension_dirs = get_chrome_extension_directories()
 
         if not extension_dirs:
+            error_msg = f"No Chrome/Chromium extension directories found for platform: {platform.system()}"
+            logger.warning(error_msg)
             return {
                 "found": False,
                 "extension_ids": [],
                 "details": [],
-                "error": f"No Chrome/Chromium extension directories found for platform: {platform.system()}"
+                "error": error_msg
             }
 
         found_extensions = []
 
         # Search each extension directory
         for ext_dir in extension_dirs:
+            logger.debug(f"Scanning extensions in: {ext_dir}")
+            extension_count = 0
             # Each subdirectory name is an extension ID
             for ext_id_dir in ext_dir.iterdir():
                 if not ext_id_dir.is_dir():
@@ -135,6 +170,8 @@ def detect_chrome_tab_reader_extension() -> dict:
                 # Extension ID should be 32 lowercase letters
                 if not (len(ext_id) == 32 and ext_id.isalpha() and ext_id.islower()):
                     continue
+
+                extension_count += 1
 
                 # Find the version directory (there should be one subdirectory with version number)
                 version_dirs = [d for d in ext_id_dir.iterdir() if d.is_dir()]
@@ -155,17 +192,23 @@ def detect_chrome_tab_reader_extension() -> dict:
                     # Check if this is Chrome Tab Reader
                     name = manifest.get("name", "")
                     if "Chrome Tab Reader" in name:
+                        logger.info(f"  ✓ Found Chrome Tab Reader: {ext_id}")
+                        logger.info(f"    Name: {name}, Version: {manifest.get('version', 'unknown')}")
                         found_extensions.append({
                             "id": ext_id,
                             "name": name,
                             "version": manifest.get("version", "unknown"),
                             "profile_path": str(ext_dir.parent)
                         })
-                except (json.JSONDecodeError, IOError):
+                except (json.JSONDecodeError, IOError) as e:
                     # Skip extensions with unreadable manifests
+                    logger.debug(f"  Skipping extension {ext_id}: {e}")
                     continue
 
+            logger.debug(f"  Scanned {extension_count} extensions in {ext_dir}")
+
         if found_extensions:
+            logger.info(f"Successfully detected {len(found_extensions)} Chrome Tab Reader installation(s)")
             return {
                 "found": True,
                 "extension_ids": [ext["id"] for ext in found_extensions],
@@ -173,19 +216,23 @@ def detect_chrome_tab_reader_extension() -> dict:
                 "error": None
             }
         else:
+            error_msg = "Chrome Tab Reader extension not found in any Chrome profile. Make sure the extension is installed."
+            logger.warning(error_msg)
             return {
                 "found": False,
                 "extension_ids": [],
                 "details": [],
-                "error": "Chrome Tab Reader extension not found in any Chrome profile. Make sure the extension is installed."
+                "error": error_msg
             }
 
     except Exception as e:
+        error_msg = f"Error detecting extension: {str(e)}"
+        logger.error(error_msg, exc_info=True)
         return {
             "found": False,
             "extension_ids": [],
             "details": [],
-            "error": f"Error detecting extension: {str(e)}"
+            "error": error_msg
         }
 
 
@@ -212,6 +259,7 @@ def extract_tab_content_via_extension() -> dict:
     Returns:
         dict: Response from extension with 'status', 'content', 'title', 'url', etc.
     """
+    logger.info(f"Attempting to connect to native messaging bridge at {BRIDGE_HOST}:{BRIDGE_PORT}")
     try:
         # Connect to TCP bridge
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -219,21 +267,29 @@ def extract_tab_content_via_extension() -> dict:
 
         try:
             sock.connect((BRIDGE_HOST, BRIDGE_PORT))
+            logger.info(f"✓ Successfully connected to native messaging bridge")
         except ConnectionRefusedError:
+            error_msg = f"Native messaging bridge is not running on {BRIDGE_HOST}:{BRIDGE_PORT}. Please ensure:\n1. Chrome extension is installed\n2. Native messaging host is installed\n3. Chrome is running with the extension loaded"
+            logger.error(f"✗ Connection refused: {error_msg}")
             return {
                 "status": "error",
-                "error": f"Native messaging bridge is not running on {BRIDGE_HOST}:{BRIDGE_PORT}. Please ensure:\n1. Chrome extension is installed\n2. Native messaging host is installed\n3. Chrome is running with the extension loaded"
+                "error": error_msg
             }
         except Exception as e:
+            error_msg = f"Failed to connect to native messaging bridge at {BRIDGE_HOST}:{BRIDGE_PORT}: {str(e)}"
+            logger.error(f"✗ Connection error: {error_msg}")
             return {
                 "status": "error",
-                "error": f"Failed to connect to native messaging bridge at {BRIDGE_HOST}:{BRIDGE_PORT}: {str(e)}"
+                "error": error_msg
             }
 
         # Send authentication if token is configured
         if BRIDGE_AUTH_TOKEN:
+            logger.debug("Sending authentication token")
             auth_line = f"AUTH {BRIDGE_AUTH_TOKEN}\n"
             sock.sendall(auth_line.encode('utf-8'))
+        else:
+            logger.debug("No authentication token configured")
 
         # Send extraction request
         request = {
@@ -241,10 +297,12 @@ def extract_tab_content_via_extension() -> dict:
             "strategy": "three-phase"
         }
 
+        logger.debug(f"Sending extraction request: {request}")
         request_json = json.dumps(request) + '\n'
         sock.sendall(request_json.encode('utf-8'))
 
         # Receive response
+        logger.debug("Waiting for response from native messaging bridge...")
         response_data = b''
         while True:
             chunk = sock.recv(4096)
@@ -257,24 +315,32 @@ def extract_tab_content_via_extension() -> dict:
         sock.close()
 
         if not response_data:
+            error_msg = "No response from native messaging bridge"
+            logger.error(f"✗ {error_msg}")
             return {
                 "status": "error",
-                "error": "No response from native messaging bridge"
+                "error": error_msg
             }
 
         # Parse response
         response = json.loads(response_data.decode('utf-8').strip())
+        logger.info(f"✓ Received response: status={response.get('status')}, content_length={len(response.get('content', ''))}")
+        logger.debug(f"Response details: title={response.get('title')}, url={response.get('url')}")
         return response
 
     except socket.timeout:
+        error_msg = "Timeout waiting for extension response (60 seconds)"
+        logger.error(f"✗ {error_msg}")
         return {
             "status": "error",
-            "error": "Timeout waiting for extension response (60 seconds)"
+            "error": error_msg
         }
     except Exception as e:
+        error_msg = f"Error communicating with extension: {str(e)}"
+        logger.error(f"✗ {error_msg}", exc_info=True)
         return {
             "status": "error",
-            "error": f"Error communicating with extension: {str(e)}"
+            "error": error_msg
         }
 
 
@@ -441,6 +507,12 @@ def find_extension_id() -> str:
 
 def main():
     """Parse command-line arguments and validate configuration."""
+    logger.info("=== Chrome Tab Reader MCP Server Starting ===")
+    logger.info(f"Python version: {sys.version}")
+    logger.info(f"Platform: {platform.system()} {platform.release()}")
+    logger.info(f"PID: {os.getpid()}")
+    logger.info(f"Log file: {LOG_FILE}")
+
     parser = argparse.ArgumentParser(
         description="Chrome Tab Reader MCP Server",
         epilog="Required configuration: Set --ollama-url and --model via CLI args or OLLAMA_BASE_URL and OLLAMA_MODEL env vars"
@@ -487,16 +559,26 @@ def main():
 
     # Validate that configuration is provided
     if not OLLAMA_BASE_URL:
+        logger.error("OLLAMA_BASE_URL not configured")
         raise ValueError(
             "OLLAMA_BASE_URL must be provided via --ollama-url argument or OLLAMA_BASE_URL environment variable. "
             "Example: uv run chrome_tab_mcp_server.py --ollama-url http://localhost:11434"
         )
 
     if not MODEL:
+        logger.error("OLLAMA_MODEL not configured")
         raise ValueError(
             "OLLAMA_MODEL must be provided via --model argument or OLLAMA_MODEL environment variable. "
             "Example: uv run chrome_tab_mcp_server.py --model llama2"
         )
+
+    logger.info(f"Configuration:")
+    logger.info(f"  Ollama URL: {OLLAMA_BASE_URL}")
+    logger.info(f"  Model: {MODEL}")
+    logger.info(f"  Bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")
+    logger.info(f"  Bridge Auth: {'ENABLED' if BRIDGE_AUTH_TOKEN else 'DISABLED'}")
+    logger.info("=== MCP Server Ready ===")
+    logger.info("")
 
 
 if __name__ == "__main__":
