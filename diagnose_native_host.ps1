@@ -49,6 +49,51 @@ $Issues = @()
 $Recommendations = @()
 
 # ===================================================================
+# 0. Clean Up Stale Log File
+# ===================================================================
+Write-Section "0. Checking for Stale Log Files"
+
+$LogFile = Join-Path $env:USERPROFILE ".chrome-tab-reader\native_host.log"
+
+if (Test-Path $LogFile) {
+    $LogSize = (Get-Item $LogFile).Length
+    $LogAge = (Get-Date) - (Get-Item $LogFile).LastWriteTime
+
+    Write-Warning "Found existing log file: $LogFile"
+    Write-Info "  Size: $LogSize bytes"
+    Write-Info "  Last modified: $($LogAge.TotalMinutes.ToString('F1')) minutes ago"
+    Write-Host ""
+
+    if ($LogSize -eq 0) {
+        Write-Info "The log file is empty (likely created by test scripts)."
+    } else {
+        Write-Info "The log file has content from a previous session."
+    }
+
+    Write-Host ""
+    Write-ColorOutput "For accurate diagnostics, this file should be deleted before testing." "Yellow"
+    Write-Host ""
+
+    $Response = Read-Host "Delete the log file now? (Y/n)"
+    if ($Response -eq '' -or $Response -eq 'y' -or $Response -eq 'Y') {
+        try {
+            Remove-Item $LogFile -Force
+            Write-Success "Log file deleted successfully"
+            Write-Info "Chrome will create a fresh log when it next launches the native host."
+        } catch {
+            Write-Failure "Failed to delete log file: $_"
+            Write-Warning "You may need to close Chrome or any processes using the log file."
+        }
+    } else {
+        Write-Warning "Keeping existing log file. Results may not be accurate."
+        Write-Info "If you see old log entries, they may not reflect the current state."
+    }
+    Write-Host ""
+} else {
+    Write-Success "No existing log file found - starting fresh"
+}
+
+# ===================================================================
 # 1. Check Manifest File
 # ===================================================================
 Write-Section "1. Checking Native Messaging Manifest"
