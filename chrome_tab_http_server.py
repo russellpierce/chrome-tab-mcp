@@ -261,7 +261,30 @@ def load_valid_tokens() -> Set[str]:
                 "tokens": [],
                 "note": "Add your extension access token here. Get it from the extension popup."
             }, f, indent=2)
+
+        # Set secure permissions on newly created file (Unix-like systems only)
+        if platform.system() != "Windows":
+            try:
+                TOKENS_FILE.chmod(0o600)
+                logger.info(f"Set secure permissions (600) on {TOKENS_FILE}")
+            except Exception as e:
+                logger.warning(f"Could not set file permissions: {e}")
+
         return set()
+
+    # Check and enforce file permissions on existing file
+    if platform.system() != "Windows":
+        try:
+            stat_info = TOKENS_FILE.stat()
+            current_perms = stat_info.st_mode & 0o777
+
+            if current_perms != 0o600:
+                logger.warning(f"Tokens file has insecure permissions: {oct(current_perms)}")
+                logger.warning(f"Attempting to fix permissions to 600...")
+                TOKENS_FILE.chmod(0o600)
+                logger.info(f"Fixed permissions on {TOKENS_FILE}")
+        except Exception as e:
+            logger.warning(f"Could not check/set file permissions: {e}")
 
     try:
         with open(TOKENS_FILE, 'r') as f:
@@ -629,10 +652,22 @@ Requirements:
     )
 
     parser.add_argument("--port", type=int, default=8888, help="Port to listen on (default: 8888)")
-    parser.add_argument("--host", default="127.0.0.1", help="Host to bind to (default: 127.0.0.1)")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
 
     args = parser.parse_args()
+
+    # Security: Force localhost binding only
+    # On untrusted LANs, binding to 0.0.0.0 would expose the service to all network devices
+    args.host = "127.0.0.1"
+    logger.info("Security: Server restricted to localhost (127.0.0.1) only")
+
+    # Verify prerequisites
+    if platform.system() == "Darwin":
+        script_path = Path(__file__).parent / "chrome_tab.scpt"
+        if not script_path.exists():
+            logger.error(f"chrome_tab.scpt not found at {script_path}")
+            logger.error("Please make sure the AppleScript file is in the same directory")
+            sys.exit(1)
 
     logger.info(f"Starting Chrome Tab Reader HTTP server on {args.host}:{args.port}")
     logger.info(f"Native Messaging bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")

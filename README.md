@@ -4,6 +4,111 @@
 
 Extract and analyze content from Chrome tabs using AI. Supports multiple access methods: Chrome extension, HTTP API, and MCP server.
 
+## Quick Start for Existing Setups
+
+Already have Chrome Tab Reader installed? Here's how to start it:
+
+**Just using the extension:**
+```bash
+# Open Chrome, navigate to a page, click the extension icon → Extract Content
+```
+
+**Using the HTTP API:**
+```bash
+# Start the HTTP server (automatically binds to localhost only for security)
+uv run chrome_tab_http_server.py
+
+# Test it
+curl -H "Authorization: Bearer YOUR_TOKEN" http://localhost:8888/api/health
+```
+
+**Using the MCP Server (with Ollama):**
+```bash
+# Required environment variables
+export OLLAMA_BASE_URL="http://localhost:11434"
+export OLLAMA_MODEL="llama2"
+
+# Start the MCP server
+uv run chrome_tab_mcp_server.py --ollama-url $OLLAMA_BASE_URL --model $OLLAMA_MODEL
+
+# Or with authentication (if native host started with --require-auth)
+export BRIDGE_AUTH_TOKEN="your-token-here"
+uv run chrome_tab_mcp_server.py \
+  --ollama-url $OLLAMA_BASE_URL \
+  --model $OLLAMA_MODEL \
+  --bridge-auth-token $BRIDGE_AUTH_TOKEN
+```
+
+**Optional: Native Messaging Bridge with Authentication**
+```bash
+# Default (no auth required)
+python chrome_tab_native_host.py
+
+# With authentication enabled
+python chrome_tab_native_host.py --require-auth
+```
+
+**Key Environment Variables:**
+- `OLLAMA_BASE_URL` - URL of your Ollama server (e.g., `http://localhost:11434`)
+- `OLLAMA_MODEL` - Model to use (e.g., `llama2`, `qwen`)
+- `BRIDGE_AUTH_TOKEN` - Optional auth token for native bridge (get from extension popup)
+
+**Configuration Files:**
+- Linux: `~/.config/chrome-tab-reader/tokens.json`
+- macOS: `~/Library/Application Support/chrome-tab-reader/tokens.json`
+- Windows: `%APPDATA%\chrome-tab-reader\tokens.json`
+
+---
+
+## Quick Start for New Setups
+
+First time setting up Chrome Tab Reader? Follow these steps:
+
+### 1. Install the Chrome Extension
+
+```bash
+# Install Node.js dependencies
+npm install
+
+# Load the extension in Chrome:
+# 1. Open chrome://extensions/
+# 2. Enable "Developer mode" (top right)
+# 3. Click "Load unpacked"
+# 4. Select the extension/ directory
+```
+
+### 2. Get Your Access Token
+
+```bash
+# Click the extension icon in Chrome
+# Your access token is shown at the top
+# Click "Copy JSON" or "Download Config File"
+```
+
+### 3. Configure Token Authentication (if using HTTP API or authenticated bridge)
+
+```bash
+# The extension provides a ready-to-use tokens.json
+# Save it to the platform-specific location shown above, or use:
+./setup_token.sh
+```
+
+### 4. Install Python Dependencies
+
+```bash
+# Option A: Using uv (recommended)
+# uv handles dependencies automatically via PEP 723 inline metadata
+
+# Option B: Using pip
+pip install -r requirements.txt
+```
+
+### 5. Start Using It!
+
+Now jump to the **[Quick Start for Existing Setups](#quick-start-for-existing-setups)** above to start the services you need.
+
+---
+
 ## Features
 
 - **Three-Phase Content Extraction:**

@@ -27,6 +27,7 @@ from pathlib import Path
 # These will be validated and set in main()
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 MODEL = os.getenv("OLLAMA_MODEL")
+BRIDGE_AUTH_TOKEN = os.getenv("BRIDGE_AUTH_TOKEN")  # Optional auth token for native bridge
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Process the attached webpage. "
@@ -79,6 +80,11 @@ def extract_tab_content_via_extension() -> dict:
                 "status": "error",
                 "error": f"Failed to connect to native messaging bridge at {BRIDGE_HOST}:{BRIDGE_PORT}: {str(e)}"
             }
+
+        # Send authentication if token is configured
+        if BRIDGE_AUTH_TOKEN:
+            auth_line = f"AUTH {BRIDGE_AUTH_TOKEN}\n"
+            sock.sendall(auth_line.encode('utf-8'))
 
         # Send extraction request
         request = {
@@ -245,16 +251,28 @@ def main():
         default=None
     )
 
+    parser.add_argument(
+        "--bridge-auth-token",
+        type=str,
+        help="Authentication token for native messaging bridge (optional). "
+             "Only needed if native host is started with --require-auth. "
+             "Can also be set via BRIDGE_AUTH_TOKEN environment variable.",
+        default=None
+    )
+
     args = parser.parse_args()
 
     # Apply command-line overrides to global configuration
-    global OLLAMA_BASE_URL, MODEL
+    global OLLAMA_BASE_URL, MODEL, BRIDGE_AUTH_TOKEN
 
     if args.ollama_url:
         OLLAMA_BASE_URL = args.ollama_url
 
     if args.model:
         MODEL = args.model
+
+    if args.bridge_auth_token:
+        BRIDGE_AUTH_TOKEN = args.bridge_auth_token
 
     # Validate that configuration is provided
     if not OLLAMA_BASE_URL:
