@@ -4,6 +4,7 @@
 # dependencies = [
 #   "fastmcp",
 #   "requests",
+#   "python-dotenv",
 # ]
 # ///
 """Chrome Tab Reader MCP Server
@@ -13,6 +14,7 @@ Supports full page analysis or filtered content extraction with flexible keyword
 """
 
 from fastmcp import FastMCP
+from dotenv import load_dotenv
 import subprocess
 import requests
 import re
@@ -22,6 +24,9 @@ import argparse
 import json
 import socket
 from pathlib import Path
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Configuration - must be provided via command-line args or environment variables
 # These will be validated and set in main()

@@ -4,11 +4,7 @@
       "command": "uv",
       "args": [
         "run",
-        "/path/to/chrome_tab_mcp_server.py",
-        "--ollama-url",
-        "http://localhost:11434",
-        "--model",
-        "llama2"
+        "/path/to/chrome_tab_mcp_server.py"
       ]
     }
   }
