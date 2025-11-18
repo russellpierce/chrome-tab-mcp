@@ -1,5 +1,7 @@
 # Browser Extension Testing & Verification Plan
 
+> **Note:** This document is AI-authored with human oversight.
+
 ## Communication Architecture Clarification
 
 ### Current Design: Pull-Based (One-Way)
