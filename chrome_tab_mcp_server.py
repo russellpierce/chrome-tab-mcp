@@ -45,11 +45,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Ensure logs are flushed immediately
+# Ensure logs are flushed immediately and use UTF-8 encoding on Windows
 for handler in logging.getLogger().handlers:
     handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s'))
     if isinstance(handler, logging.StreamHandler):
-        handler.stream.reconfigure(line_buffering=True) if hasattr(handler.stream, 'reconfigure') else None
+        # Reconfigure stream to use UTF-8 encoding (fixes Windows cp1252 encoding issues)
+        if hasattr(handler.stream, 'reconfigure'):
+            handler.stream.reconfigure(line_buffering=True, encoding='utf-8')
+        # Python < 3.7: Try to set encoding on the stream writer
+        elif hasattr(handler.stream, 'buffer'):
+            import io
+            handler.stream = io.TextIOWrapper(handler.stream.buffer, encoding='utf-8', line_buffering=True)
 
 # Configuration - must be provided via command-line args or environment variables
 # These will be validated and set in main()
