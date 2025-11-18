@@ -207,22 +207,43 @@ try {
     $WSLStatus = wsl --status 2>&1
     if ($LASTEXITCODE -eq 0) {
         Write-Info "WSL is installed and running"
-        Write-Host $WSLStatus
 
-        # Check if WSL has processes on port 8765
-        Write-Info "Checking if WSL has processes on port 8765..."
-        try {
-            $WSLNetstat = wsl -e bash -c "netstat -tuln 2>/dev/null | grep :8765" 2>&1
-            if ($WSLNetstat) {
-                Write-Warning "WSL has something listening on port 8765!"
-                Write-Host $WSLNetstat
-                $Issues += "WSL occupying port 8765"
-                $Recommendations += "In WSL, run: sudo fuser -k 8765/tcp"
-            } else {
-                Write-Success "WSL is not using port 8765"
+        # List all WSL distributions
+        $WSLList = wsl -l -q 2>&1 | Where-Object { $_ -match '\S' }
+        Write-Info "WSL distributions found: $($WSLList -join ', ')"
+
+        # Try to check each Linux distribution (skip docker-desktop)
+        $CheckedAny = $false
+        foreach ($distro in $WSLList) {
+            $distroName = $distro.Trim()
+            if ($distroName -like "docker-desktop*") {
+                Write-Info "  Skipping $distroName (Docker WSL backend)"
+                continue
             }
-        } catch {
-            Write-Info "Could not check WSL netstat (this is OK if WSL doesn't have netstat installed)"
+
+            Write-Info "  Checking $distroName for port 8765..."
+            try {
+                # Try with 'sh' first (more portable than bash)
+                $WSLNetstat = wsl -d $distroName -e sh -c "command -v ss >/dev/null 2>&1 && ss -tuln | grep :8765 || (command -v netstat >/dev/null 2>&1 && netstat -tuln | grep :8765) || echo 'no-tools'" 2>&1
+
+                if ($LASTEXITCODE -ne 0 -or $WSLNetstat -match "ERROR" -or $WSLNetstat -match "no-tools") {
+                    Write-Info "    → Could not check (ss/netstat not available or sh not found)"
+                } elseif ($WSLNetstat -and $WSLNetstat -notmatch "no-tools") {
+                    Write-Warning "    → Port 8765 IS in use in $distroName!"
+                    Write-Host "    $WSLNetstat" -ForegroundColor Yellow
+                    $Issues += "WSL ($distroName) occupying port 8765"
+                    $Recommendations += "In WSL ($distroName), run: sudo fuser -k 8765/tcp"
+                } else {
+                    Write-Success "    → Port 8765 not in use"
+                }
+                $CheckedAny = $true
+            } catch {
+                Write-Info "    → Could not check: $_"
+            }
+        }
+
+        if (-not $CheckedAny) {
+            Write-Warning "Could not check any WSL distributions for port usage"
         }
     }
 } catch {
@@ -295,9 +316,83 @@ if (Test-Path $LogFile) {
 }
 
 # ===================================================================
-# 8. Chrome Extension Check
+# 8. Chrome-Side Debugging (If Log is Empty)
 # ===================================================================
-Write-Section "8. Chrome Extension Verification"
+if (-not (Test-Path $LogFile) -or (Test-Path $LogFile -and (Get-Item $LogFile).Length -eq 0)) {
+    Write-Section "8. Chrome-Side Debugging (Why Isn't Chrome Launching the Host?)"
+
+    Write-Warning "The log file is empty, which means Chrome has NEVER launched the native host."
+    Write-Info "This suggests Chrome either:"
+    Write-Host "  • Cannot find or read the manifest file"
+    Write-Host "  • Cannot execute the batch wrapper"
+    Write-Host "  • The extension isn't actually requesting native messaging"
+    Write-Host "  • Chrome's native messaging is blocked by policy or permissions"
+    Write-Host ""
+
+    Write-ColorOutput "Troubleshooting Steps:" "Yellow"
+    Write-Host ""
+
+    Write-ColorOutput "Step 1: Manually test the batch wrapper" "Cyan"
+    Write-Host "Run this command to see if the native host starts:"
+    Write-Host "  `"$WrapperBatFile`"" -ForegroundColor White
+    Write-Host ""
+    Write-Host "You should see emergency logs like:"
+    Write-Host "  [timestamp] EMERGENCY: Native host starting..."
+    Write-Host "  [timestamp] EMERGENCY: Python version: ..."
+    Write-Host ""
+    Write-Host "If you DON'T see these logs, the batch file can't execute properly."
+    Write-Host "Press Ctrl+C to stop after seeing the logs."
+    Write-Host ""
+
+    Write-ColorOutput "Step 2: Check Chrome's native messaging status" "Cyan"
+    Write-Host "1. Open Chrome and go to: chrome://policy/"
+    Write-Host "2. Search for 'NativeMessaging'"
+    Write-Host "3. Verify there are no policies blocking native messaging"
+    Write-Host ""
+
+    Write-ColorOutput "Step 3: Check extension background service worker" "Cyan"
+    Write-Host "1. Go to chrome://extensions/"
+    Write-Host "2. Find 'Chrome Tab Reader' and click 'service worker' link"
+    Write-Host "3. Open the Console tab"
+    Write-Host "4. Click the extension icon in Chrome toolbar"
+    Write-Host "5. Look for errors about native messaging in the console"
+    Write-Host ""
+
+    Write-ColorOutput "Step 4: Launch Chrome with verbose logging" "Cyan"
+    Write-Host "Close ALL Chrome windows, then run:"
+    Write-Host '  "C:\Program Files\Google\Chrome\Application\chrome.exe" --enable-logging --v=1 --vmodule=native_messaging_host=3' -ForegroundColor White
+    Write-Host ""
+    Write-Host "Then try to use the extension. Check for native messaging errors in:"
+    Write-Host "  $env:LOCALAPPDATA\Google\Chrome\User Data\chrome_debug.log"
+    Write-Host ""
+
+    Write-ColorOutput "Step 5: Verify manifest is readable by Chrome" "Cyan"
+    Write-Host "Check manifest permissions:"
+    Write-Host "  Get-Acl `"$ManifestFile`" | Format-List"
+    Write-Host ""
+    Write-Host "Verify manifest content:"
+    Write-Host "  Get-Content `"$ManifestFile`" | ConvertFrom-Json | ConvertTo-Json -Depth 10"
+    Write-Host ""
+
+    Write-ColorOutput "Step 6: Check if extension is using native messaging" "Cyan"
+    Write-Host "The extension must call chrome.runtime.connectNative() to trigger the host."
+    Write-Host "Check extension/service_worker.js for the native messaging code."
+    Write-Host ""
+
+    Write-ColorOutput "Common Causes:" "Yellow"
+    Write-Host "  ✗ Manifest path uses backslashes instead of forward slashes"
+    Write-Host "  ✗ Batch file lacks execute permissions"
+    Write-Host "  ✗ Python path has spaces and isn't properly quoted"
+    Write-Host "  ✗ Extension ID mismatch between extension and manifest"
+    Write-Host "  ✗ Extension never calls chrome.runtime.connectNative()"
+    Write-Host "  ✗ Chrome policy blocking native messaging"
+    Write-Host ""
+}
+
+# ===================================================================
+# 9. Chrome Extension Check
+# ===================================================================
+Write-Section "9. Chrome Extension Verification"
 
 Write-Info "To verify the extension is installed and enabled:"
 Write-Host "1. Open Chrome and navigate to: chrome://extensions/"
