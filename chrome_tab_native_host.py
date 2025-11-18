@@ -377,7 +377,8 @@ def handle_mcp_client(client_socket):
         }
         try:
             client_socket.sendall((json.dumps(error_response) + '\n').encode('utf-8'))
-        except:
+        except (OSError, socket.error):
+            # Expected error when client disconnects before receiving error response
             pass
     finally:
         client_socket.close()
