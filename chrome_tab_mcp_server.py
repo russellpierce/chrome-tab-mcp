@@ -23,6 +23,7 @@ import sys
 import argparse
 import json
 import socket
+import platform
 from pathlib import Path
 
 # Load environment variables from .env file
@@ -44,6 +45,149 @@ DEFAULT_SYSTEM_PROMPT = (
 # Native messaging bridge TCP configuration
 BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = 8765
+
+
+def get_chrome_extension_directories() -> list[Path]:
+    """
+    Get Chrome extension directories for all profiles on the current platform.
+
+    Returns:
+        list[Path]: List of extension directory paths that exist
+    """
+    system = platform.system()
+    home = Path.home()
+    extension_dirs = []
+
+    if system == "Linux":
+        # Chrome and Chromium on Linux
+        base_dirs = [
+            home / ".config/google-chrome",
+            home / ".config/chromium",
+        ]
+    elif system == "Darwin":
+        # macOS
+        base_dirs = [
+            home / "Library/Application Support/Google/Chrome",
+            home / "Library/Application Support/Chromium",
+        ]
+    elif system == "Windows":
+        # Windows
+        local_appdata = Path(os.environ.get("LOCALAPPDATA", home / "AppData/Local"))
+        base_dirs = [
+            local_appdata / "Google/Chrome/User Data",
+            local_appdata / "Chromium/User Data",
+        ]
+    else:
+        return []
+
+    # Check each base directory for profiles
+    for base_dir in base_dirs:
+        if not base_dir.exists():
+            continue
+
+        # Check Default profile and numbered profiles (Profile 1, Profile 2, etc.)
+        for profile_dir in base_dir.iterdir():
+            if not profile_dir.is_dir():
+                continue
+
+            # Look for Extensions subdirectory
+            ext_dir = profile_dir / "Extensions"
+            if ext_dir.exists() and ext_dir.is_dir():
+                extension_dirs.append(ext_dir)
+
+    return extension_dirs
+
+
+def detect_chrome_tab_reader_extension() -> dict:
+    """
+    Detect Chrome Tab Reader extension ID(s) from Chrome's extension directories.
+
+    Returns:
+        dict: {
+            "found": bool,
+            "extension_ids": list[str],
+            "details": list[dict],  # Each dict contains: id, name, version, profile_path
+            "error": str | None
+        }
+    """
+    try:
+        extension_dirs = get_chrome_extension_directories()
+
+        if not extension_dirs:
+            return {
+                "found": False,
+                "extension_ids": [],
+                "details": [],
+                "error": f"No Chrome/Chromium extension directories found for platform: {platform.system()}"
+            }
+
+        found_extensions = []
+
+        # Search each extension directory
+        for ext_dir in extension_dirs:
+            # Each subdirectory name is an extension ID
+            for ext_id_dir in ext_dir.iterdir():
+                if not ext_id_dir.is_dir():
+                    continue
+
+                ext_id = ext_id_dir.name
+
+                # Extension ID should be 32 lowercase letters
+                if not (len(ext_id) == 32 and ext_id.isalpha() and ext_id.islower()):
+                    continue
+
+                # Find the version directory (there should be one subdirectory with version number)
+                version_dirs = [d for d in ext_id_dir.iterdir() if d.is_dir()]
+                if not version_dirs:
+                    continue
+
+                # Check the first version directory for manifest.json
+                version_dir = version_dirs[0]
+                manifest_path = version_dir / "manifest.json"
+
+                if not manifest_path.exists():
+                    continue
+
+                try:
+                    with open(manifest_path, 'r', encoding='utf-8') as f:
+                        manifest = json.load(f)
+
+                    # Check if this is Chrome Tab Reader
+                    name = manifest.get("name", "")
+                    if "Chrome Tab Reader" in name:
+                        found_extensions.append({
+                            "id": ext_id,
+                            "name": name,
+                            "version": manifest.get("version", "unknown"),
+                            "profile_path": str(ext_dir.parent)
+                        })
+                except (json.JSONDecodeError, IOError):
+                    # Skip extensions with unreadable manifests
+                    continue
+
+        if found_extensions:
+            return {
+                "found": True,
+                "extension_ids": [ext["id"] for ext in found_extensions],
+                "details": found_extensions,
+                "error": None
+            }
+        else:
+            return {
+                "found": False,
+                "extension_ids": [],
+                "details": [],
+                "error": "Chrome Tab Reader extension not found in any Chrome profile. Make sure the extension is installed."
+            }
+
+    except Exception as e:
+        return {
+            "found": False,
+            "extension_ids": [],
+            "details": [],
+            "error": f"Error detecting extension: {str(e)}"
+        }
+
 
 # Initialize FastMCP server
 mcp = FastMCP(
@@ -231,6 +375,68 @@ def process_chrome_tab(
         )
     except Exception as e:
         return f"Error calling Ollama API: {str(e)}"
+
+
+@mcp.tool()
+def find_extension_id() -> str:
+    """Find the Chrome Tab Reader extension ID on this system.
+
+    Scans Chrome/Chromium extension directories to automatically detect the
+    installed Chrome Tab Reader extension ID. This is useful for:
+    - Setting up native messaging host configuration
+    - Troubleshooting connection issues
+    - Verifying the extension is properly installed
+
+    Returns:
+        str: Human-readable report of detected extension IDs and their locations.
+            If multiple profiles have the extension, all instances are listed.
+
+    Examples:
+        find_extension_id()
+        # → Reports extension ID(s) and which Chrome profiles have the extension installed
+    """
+    result = detect_chrome_tab_reader_extension()
+
+    if result["found"]:
+        output = ["Chrome Tab Reader Extension Detected!", ""]
+
+        # Show each instance
+        for detail in result["details"]:
+            output.append(f"Extension ID: {detail['id']}")
+            output.append(f"  Name: {detail['name']}")
+            output.append(f"  Version: {detail['version']}")
+            output.append(f"  Profile: {detail['profile_path']}")
+            output.append("")
+
+        # If multiple instances found
+        if len(result["details"]) > 1:
+            output.append(f"Note: Extension found in {len(result['details'])} Chrome profiles.")
+            output.append("All instances have the same ID (as expected)." if len(set(result["extension_ids"])) == 1 else "WARNING: Different IDs found in different profiles!")
+            output.append("")
+
+        # Add usage instructions
+        output.append("To configure native messaging, run:")
+        output.append(f"  ./install_native_host.sh {result['extension_ids'][0]}")
+        output.append("")
+        output.append("Or manually update the native messaging manifest:")
+        output.append(f"  allowed_origins: [\"chrome-extension://{result['extension_ids'][0]}/\"]")
+
+        return "\n".join(output)
+    else:
+        error_msg = result.get("error", "Unknown error")
+        output = [
+            "Chrome Tab Reader Extension NOT Found",
+            "",
+            f"Error: {error_msg}",
+            "",
+            "Troubleshooting:",
+            "1. Install the Chrome Tab Reader extension in Chrome",
+            "2. Verify it appears in chrome://extensions/",
+            "3. Ensure Chrome is installed (checked directories for Chrome and Chromium)",
+            "",
+            f"Platform: {platform.system()}",
+        ]
+        return "\n".join(output)
 
 
 def main():
