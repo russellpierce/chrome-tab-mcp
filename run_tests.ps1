@@ -110,7 +110,7 @@ switch ($TestType) {
         # Check if Playwright browsers are installed
         Write-Info "Checking Playwright browser installation..."
         try {
-            $null = uv run python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); p.chromium.launch(); p.stop()" 2>&1
+            $output = uv run python -c 'from playwright.sync_api import sync_playwright; p = sync_playwright().start(); p.chromium.launch(); p.stop()' 2>&1
             $playwrightInstalled = $LASTEXITCODE -eq 0
         } catch {
             $playwrightInstalled = $false
@@ -260,7 +260,7 @@ switch ($TestType) {
         Write-Host "  ci           - Run CI-safe tests (no Chrome needed - for GitHub Actions)"
         Write-Host "  unit         - Run unit tests (FastAPI schema, HTTP server, native messaging)"
         Write-Host "  integration  - Run integration tests (requires native host)"
-        Write-Host "  e2e          - Run end-to-end tests (auto-checks & installs Playwright)"
+        Write-Host "  e2e          - Run end-to-end tests (auto-checks and installs Playwright)"
         Write-Host "  extension    - Run Chrome extension tests (Jest/Puppeteer - requires Chrome)"
         Write-Host "  manual       - Run manual interactive test"
         Write-Host "  coverage     - Run tests with coverage report"
