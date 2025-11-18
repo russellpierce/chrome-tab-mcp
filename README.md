@@ -111,6 +111,62 @@ Now jump to the **[Quick Start for Existing Setups](#quick-start-for-existing-se
 
 ---
 
+## Claude Desktop Configuration
+
+To use this MCP server with Claude Desktop:
+
+### Prerequisites
+
+1. **Complete the setup steps above** - Install the Chrome extension and native messaging bridge first (see [Quick Start for New Setups](#quick-start-for-new-setups))
+2. **Install Ollama** - Have Ollama running with a model (e.g., `llama2`, `qwen`)
+3. **Install uv** - Or use `python` instead of `uv` in the configuration
+
+### Configuration File Location
+
+The Claude Desktop configuration file location varies by platform:
+
+- **Linux:** `~/.config/Claude/claude_desktop_config.json`
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+### Basic Configuration
+
+Add this to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "chrome-tab-reader": {
+      "command": "uv",
+      "args": [
+        "run",
+        "/absolute/path/to/chrome_tab_mcp_server.py",
+        "--ollama-url",
+        "http://localhost:11434",
+        "--model",
+        "llama2"
+      ]
+    }
+  }
+}
+```
+
+**Important:** Replace `/absolute/path/to/` with the actual path to your `chrome_tab_mcp_server.py` file.
+
+### With Authentication
+
+If using token authentication, see **[ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md)** for configuration details.
+
+### Testing Your Configuration
+
+After adding the configuration:
+
+1. Restart Claude Desktop
+2. Open a chat and check if the MCP server is connected
+3. Try asking Claude to extract content from your current Chrome tab
+
+---
+
 ## Features
 
 - **Three-Phase Content Extraction:**

@@ -4,7 +4,7 @@
       "command": "uv",
       "args": [
         "run",
-        "/path/to/chrome_tab_mcp_server.py",
+        "/absolute/path/to/chrome_tab_mcp_server.py",
         "--ollama-url",
         "http://localhost:11434",
         "--model",
@@ -13,4 +13,41 @@
     }
   }
 }
+
+// Example with authentication:
+// {
+//   "mcpServers": {
+//     "chrome-tab-reader": {
+//       "command": "uv",
+//       "args": [
+//         "run",
+//         "/absolute/path/to/chrome_tab_mcp_server.py",
+//         "--ollama-url",
+//         "http://localhost:11434",
+//         "--model",
+//         "llama2",
+//         "--bridge-auth-token",
+//         "your-token-from-extension-popup"
+//       ]
+//     }
+//   }
+// }
+
+// Example with environment variables:
+// {
+//   "mcpServers": {
+//     "chrome-tab-reader": {
+//       "command": "uv",
+//       "args": [
+//         "run",
+//         "/absolute/path/to/chrome_tab_mcp_server.py"
+//       ],
+//       "env": {
+//         "OLLAMA_BASE_URL": "http://localhost:11434",
+//         "OLLAMA_MODEL": "llama2",
+//         "BRIDGE_AUTH_TOKEN": "your-token-from-extension-popup"
+//       }
+//     }
+//   }
+// }
 

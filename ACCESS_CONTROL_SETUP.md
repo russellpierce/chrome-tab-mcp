@@ -121,8 +121,66 @@ If using with the MCP server, add the token to your environment or configuration
 
 ```bash
 # In your shell profile or .env file
-export CHROME_TAB_READER_TOKEN="your-token-here"
+export BRIDGE_AUTH_TOKEN="your-token-here"
 ```
+
+### Claude Desktop Configuration with Authentication
+
+When using the MCP server with Claude Desktop and authentication enabled, you need to pass the token in your configuration.
+
+**Configuration file location:**
+- **Linux:** `~/.config/Claude/claude_desktop_config.json`
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+**Option 1: Using command-line arguments**
+
+```json
+{
+  "mcpServers": {
+    "chrome-tab-reader": {
+      "command": "uv",
+      "args": [
+        "run",
+        "/absolute/path/to/chrome_tab_mcp_server.py",
+        "--ollama-url",
+        "http://localhost:11434",
+        "--model",
+        "llama2",
+        "--bridge-auth-token",
+        "your-token-from-extension-popup"
+      ]
+    }
+  }
+}
+```
+
+**Option 2: Using environment variables (recommended)**
+
+```json
+{
+  "mcpServers": {
+    "chrome-tab-reader": {
+      "command": "uv",
+      "args": [
+        "run",
+        "/absolute/path/to/chrome_tab_mcp_server.py"
+      ],
+      "env": {
+        "OLLAMA_BASE_URL": "http://localhost:11434",
+        "OLLAMA_MODEL": "llama2",
+        "BRIDGE_AUTH_TOKEN": "your-token-from-extension-popup"
+      }
+    }
+  }
+}
+```
+
+**Important notes:**
+- Replace `/absolute/path/to/` with the actual path to your `chrome_tab_mcp_server.py` file
+- Get your token from the Chrome Tab Reader extension popup
+- The token is only needed if you start the native messaging bridge with `--require-auth`
+- For basic usage without authentication, see the main README.md
 
 ## Token Management
 
