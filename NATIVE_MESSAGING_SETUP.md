@@ -1,6 +1,6 @@
 # Native Messaging Setup Guide
 
-> **Note:** This document is AI-authored with human oversight.
+> **Note:** This document is AI-authored with very limited human oversight.
 
 This guide explains how to set up Native Messaging to connect the MCP server directly to the Chrome extension.
 

@@ -1,6 +1,6 @@
 # Browser Extension Setup & Installation
 
-> **Note:** This document is AI-authored with human oversight.
+> **Note:** This document is AI-authored with very limited human oversight.
 
 ## Quick Start
 
@@ -108,7 +108,7 @@ From project root:
 
 ```bash
 # First time: install dependencies
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 # Run with Ollama on localhost
 python chrome_tab_mcp_server.py --ollama-url http://localhost:11434 --model llama2
@@ -254,7 +254,7 @@ Future enhancement: Make configurable via settings page.
 
 **Extraction timeout:**
 - Lazy-loading: 5 seconds max (configurable in `content_script.js`)
-- DOM stability: 3 minutes max (aligns with Ollama timeout)
+- DOM stability: 30 seconds max (prevents excessive wait times)
 - Readability: <1 second
 
 **MCP request timeout:**
@@ -263,8 +263,8 @@ Future enhancement: Make configurable via settings page.
 
 **Edit in content_script.js:**
 ```javascript
-async function waitForDOMStability(timeoutMs = 180000) {
-    // 180000 ms = 3 minutes
+async function waitForDOMStability(timeoutMs = 30000) {
+    // 30000 ms = 30 seconds
     // Change timeoutMs parameter to adjust
 }
 ```
@@ -381,7 +381,7 @@ Submit to Chrome Web Store:
 ### Extraction takes forever
 
 1. DOM stability waiting for content to stabilize
-2. Maximum wait is 3 minutes (by design)
+2. Maximum wait is 30 seconds (by design)
 3. If page keeps changing, hard timeout triggers
 4. Try on a different page
 5. Check browser console for JS errors on page
@@ -403,7 +403,7 @@ Submit to Chrome Web Store:
 
 1. Check Python version: `python --version` (need 3.8+)
 2. Check dependencies: `pip list | grep fastmcp`
-3. Missing dependency? `pip install fastmcp requests`
+3. Missing dependency? `uv pip install fastmcp requests python-dotenv`
 4. Port 3000 already in use? `lsof -i :3000`
 
 ### Ollama won't respond
@@ -435,7 +435,7 @@ To optimize:
 
 Current targets:
 - Phase 1 (lazy-loading): <5 seconds
-- Phase 2 (DOM stability): <3 minutes (typically 0-2 sec)
+- Phase 2 (DOM stability): <30 seconds (typically 0-2 sec)
 - Phase 3 (readability): <1 second
 
 To optimize:

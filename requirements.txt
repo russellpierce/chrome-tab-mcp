@@ -1,17 +1,20 @@
 # Chrome Tab Reader - Python Dependencies
 
-# Optional: For proper XDG Base Directory Specification compliance on Linux
-# and cross-platform config directory support
-# If not installed, will fall back to manual implementation
-platformdirs>=4.0.0
+# MCP Server dependencies
+fastmcp>=0.1.0
+requests>=2.31.0
+python-dotenv
 
-# FastAPI for HTTP API with automatic OpenAPI spec generation
+# HTTP Server dependencies
 fastapi>=0.104.0
-
-# ASGI server for running FastAPI
 uvicorn[standard]>=0.24.0
 
-# Note: The HTTP server (chrome_tab_http_server.py) requires FastAPI and uvicorn.
-# platformdirs is optional but recommended for better compliance with system standards.
+# Cross-platform config directory support (XDG Base Directory Specification)
+platformdirs>=4.0.0
+
+# Note: Install with uv (required):
+#   uv pip install -r requirements.txt
 #
-# Install with: pip install -r requirements.txt
+# Or let uv handle dependencies automatically via PEP 723 inline metadata:
+#   uv run chrome_tab_http_server.py
+#   uv run chrome_tab_mcp_server.py

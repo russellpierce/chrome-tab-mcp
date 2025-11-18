@@ -1,6 +1,6 @@
 # Chrome Tab Reader Browser Extension
 
-> **Note:** This document is AI-authored with human oversight.
+> **Note:** This document is AI-authored with very limited human oversight.
 
 A sophisticated browser extension that extracts and analyzes webpage content using AI, powered by a local Ollama server.
 
@@ -196,7 +196,7 @@ Tested and verified on:
 
 ### Extraction takes 3+ minutes
 - Normal behavior for large pages with dynamic content
-- MutationObserver waits up to 3 minutes for DOM stability
+- MutationObserver waits up to 30 seconds for DOM stability
 - Hard timeout prevents infinite waits
 
 ### "Ollama server not responding"
@@ -227,7 +227,7 @@ Edit `content_script.js` to adjust:
 
 ```javascript
 // Phase 2: DOM stability timeout
-async function waitForDOMStability(timeoutMs = 180000) {  // 3 minutes
+async function waitForDOMStability(timeoutMs = 30000) {  // 30 seconds
 ```
 
 ### System Prompt
@@ -267,7 +267,7 @@ extension/
 
 ```bash
 # Install dependencies (MCP server)
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 # Load extension in Chrome
 # - chrome://extensions → Load unpacked → select extension/
