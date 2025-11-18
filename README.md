@@ -396,7 +396,8 @@ http://localhost:8888/
 |-----------|---------|-------|-------|
 | Chrome Extension | ✅ | ✅ | ✅ |
 | HTTP Server | ✅ | ✅ | ✅ |
-| MCP Server | ❌ | ✅ | ❌ |
+| MCP Server (Native Messaging) | ✅ | ✅ | ✅ |
+| MCP Server (Legacy AppleScript) | ❌ | ✅ | ❌ |
 
 ## Browser Support
 

@@ -40,7 +40,9 @@ Web Page Content
 
 ### 2. Install the Native Messaging Host
 
-Run the installation script with your extension ID:
+Choose the installation script for your platform:
+
+#### Linux / macOS
 
 ```bash
 ./install_native_host.sh <your-extension-id>
@@ -52,8 +54,35 @@ Run the installation script with your extension ID:
 ```
 
 This script will:
+- Validate Python 3.8+ is installed
 - Make the native host script executable
 - Create the platform-specific manifest directory
+- Install the native messaging host manifest with correct paths
+
+#### Windows
+
+**Prerequisites:**
+- Python 3.8 or later installed and in PATH
+- PowerShell execution policy allows running scripts (see below if needed)
+
+```powershell
+.\install_native_host.ps1 <your-extension-id>
+```
+
+**Example:**
+```powershell
+.\install_native_host.ps1 abcdefghijklmnopqrstuvwxyz123456
+```
+
+**If you get an execution policy error:**
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+This script will:
+- Validate Python 3.8+ is installed and in PATH
+- Create a batch wrapper for invoking the Python script
+- Create the Windows manifest directory
 - Install the native messaging host manifest with correct paths
 
 ### 3. Verify Installation
@@ -69,8 +98,19 @@ This script will:
 
 The native host logs all activity:
 
+**Linux / macOS:**
 ```bash
 tail -f ~/.chrome-tab-reader/native_host.log
+```
+
+**Windows (PowerShell):**
+```powershell
+Get-Content ~\.chrome-tab-reader\native_host.log -Wait -Tail 20
+```
+
+**Windows (Command Prompt):**
+```cmd
+type %USERPROFILE%\.chrome-tab-reader\native_host.log
 ```
 
 You should see messages like:
@@ -117,23 +157,36 @@ process_chrome_tab()
 **Solutions:**
 1. Verify the manifest is installed:
    ```bash
-   # Linux/Mac
+   # Linux/macOS
    cat ~/.config/google-chrome/NativeMessagingHosts/com.chrome_tab_reader.host.json
+   # (macOS: ~/Library/Application Support/Google/Chrome/NativeMessagingHosts/...)
 
-   # Check that "path" points to chrome_tab_native_host.py
+   # Windows (PowerShell)
+   Get-Content "$env:APPDATA\Google\Chrome\NativeMessagingHosts\com.chrome_tab_reader.host.json"
+
+   # Check that "path" points to the host script (or wrapper on Windows)
    # Check that "allowed_origins" contains your extension ID
    ```
 
 2. Verify the native host script is executable:
    ```bash
+   # Linux/macOS
    ls -l chrome_tab_native_host.py
    # Should show: -rwxr-xr-x
+
+   # Windows - verify wrapper batch file exists
+   dir chrome_tab_native_host.bat
    ```
 
 3. Test the native host manually:
    ```bash
-   # This should start the host (it won't output anything)
+   # Linux/macOS
    ./chrome_tab_native_host.py
+
+   # Windows (PowerShell)
+   python chrome_tab_native_host.py
+
+   # This should start the host (it won't output anything until Chrome connects)
    ```
 
 4. Reload the extension and retry
@@ -266,12 +319,34 @@ The manifest file should be unique per browser but can use the same native host 
 
 To remove the native messaging host:
 
+**Linux:**
 ```bash
 # Remove manifest
 rm ~/.config/google-chrome/NativeMessagingHosts/com.chrome_tab_reader.host.json
 
 # Remove logs (optional)
 rm -rf ~/.chrome-tab-reader/
+```
+
+**macOS:**
+```bash
+# Remove manifest
+rm ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts/com.chrome_tab_reader.host.json
+
+# Remove logs (optional)
+rm -rf ~/.chrome-tab-reader/
+```
+
+**Windows (PowerShell):**
+```powershell
+# Remove manifest
+Remove-Item "$env:APPDATA\Google\Chrome\NativeMessagingHosts\com.chrome_tab_reader.host.json"
+
+# Remove wrapper script
+Remove-Item "chrome_tab_native_host.bat"
+
+# Remove logs (optional)
+Remove-Item -Recurse "$env:USERPROFILE\.chrome-tab-reader\"
 ```
 
 ## References

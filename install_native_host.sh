@@ -59,6 +59,37 @@ echo "Detected platform: $PLATFORM"
 echo "Manifest directory: $MANIFEST_DIR"
 echo ""
 
+# Check Python installation and version
+echo "Checking Python installation..."
+PYTHON_CMD=""
+if command -v python3 &> /dev/null; then
+    PYTHON_CMD="python3"
+elif command -v python &> /dev/null; then
+    PYTHON_CMD="python"
+else
+    echo -e "${RED}Error: Python not found${NC}"
+    echo ""
+    echo "Python 3.8 or higher is required."
+    echo "Please install Python from https://www.python.org/downloads/"
+    exit 1
+fi
+
+# Check Python version
+PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | grep -oP '\d+\.\d+')
+PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+
+if [ "$PYTHON_MAJOR" -lt 3 ] || ([ "$PYTHON_MAJOR" -eq 3 ] && [ "$PYTHON_MINOR" -lt 8 ]); then
+    echo -e "${RED}Error: Python 3.8 or higher required${NC}"
+    echo "Found: Python $PYTHON_VERSION"
+    echo ""
+    echo "Please upgrade Python from https://www.python.org/downloads/"
+    exit 1
+fi
+
+echo -e "${GREEN}✓${NC} Found Python $PYTHON_VERSION"
+echo ""
+
 # Check if native host script exists
 if [ ! -f "$NATIVE_HOST_SCRIPT" ]; then
     echo -e "${RED}Error: Native host script not found at $NATIVE_HOST_SCRIPT${NC}"
