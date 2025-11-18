@@ -109,9 +109,15 @@ switch ($TestType) {
 
         # Check if Playwright browsers are installed
         Write-Info "Checking Playwright browser installation..."
+        $playwrightCmd = 'from playwright.sync_api import sync_playwright; p = sync_playwright().start(); p.chromium.launch(); p.stop()'
+        $playwrightInstalled = $false
         try {
-            $null = uv run python -c "from playwright.sync_api import sync_playwright; p = sync_playwright().start(); p.chromium.launch(); p.stop()" 2>&1
-            $playwrightInstalled = $LASTEXITCODE -eq 0
+            $ErrorActionPreference = 'Continue'
+            $output = uv run python -c $playwrightCmd 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $playwrightInstalled = $true
+            }
+            $ErrorActionPreference = 'Stop'
         } catch {
             $playwrightInstalled = $false
         }
@@ -122,7 +128,7 @@ switch ($TestType) {
             Write-Host "Playwright browsers need to be installed to run e2e tests."
             Write-Host "This will download Chromium (approximately 150-300 MB)."
             Write-Host ""
-            $response = Read-Host "Install Playwright browsers now using 'uv run playwright install chromium'? (y/n)"
+            $response = Read-Host "Install Playwright browsers now? (y/n)"
 
             if ($response -match "^[Yy]") {
                 Write-Info "Installing Playwright browsers..."
@@ -260,7 +266,7 @@ switch ($TestType) {
         Write-Host "  ci           - Run CI-safe tests (no Chrome needed - for GitHub Actions)"
         Write-Host "  unit         - Run unit tests (FastAPI schema, HTTP server, native messaging)"
         Write-Host "  integration  - Run integration tests (requires native host)"
-        Write-Host "  e2e          - Run end-to-end tests (auto-checks & installs Playwright)"
+        Write-Host "  e2e          - Run end-to-end tests (auto-checks and installs Playwright)"
         Write-Host "  extension    - Run Chrome extension tests (Jest/Puppeteer - requires Chrome)"
         Write-Host "  manual       - Run manual interactive test"
         Write-Host "  coverage     - Run tests with coverage report"
@@ -273,9 +279,9 @@ switch ($TestType) {
         Write-Host "  ✗ Local only:   integration, e2e, extension, manual (Chrome required)"
         Write-Host ""
         Write-Host "Environment Setup:"
-        Write-Host "  The 'e2e' test mode automatically checks environment setup and will"
+        Write-Host "  The e2e test mode automatically checks environment setup and will"
         Write-Host "  prompt to install missing dependencies (e.g., Playwright browsers)"
-        Write-Host "  within uv's managed .venv"
+        Write-Host "  within uv managed .venv"
         Write-Host ""
         Write-Host "Examples:"
         Write-Host "  .\run_tests.ps1              # Run all tests"
@@ -284,12 +290,12 @@ switch ($TestType) {
         Write-Host "  .\run_tests.ps1 manual       # Test actual Chrome connection"
         Write-Host "  .\run_tests.ps1 e2e          # Full end-to-end test (auto-setup)"
         Write-Host ""
-        Write-Host "Note: All tests use 'uv run' to ensure consistent Python environment"
+        Write-Host "Note: All tests use uv run to ensure consistent Python environment"
     }
 
     default {
         Write-Error-Msg "Unknown test type: $TestType"
-        Write-Host "Run '.\run_tests.ps1 help' for usage"
+        Write-Host "Run .\run_tests.ps1 help for usage"
         exit 1
     }
 }
