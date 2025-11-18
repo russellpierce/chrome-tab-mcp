@@ -109,9 +109,15 @@ switch ($TestType) {
 
         # Check if Playwright browsers are installed
         Write-Info "Checking Playwright browser installation..."
+        $playwrightCmd = 'from playwright.sync_api import sync_playwright; p = sync_playwright().start(); p.chromium.launch(); p.stop()'
+        $playwrightInstalled = $false
         try {
-            $output = uv run python -c 'from playwright.sync_api import sync_playwright; p = sync_playwright().start(); p.chromium.launch(); p.stop()' 2>&1
-            $playwrightInstalled = $LASTEXITCODE -eq 0
+            $ErrorActionPreference = 'Continue'
+            $output = uv run python -c $playwrightCmd 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $playwrightInstalled = $true
+            }
+            $ErrorActionPreference = 'Stop'
         } catch {
             $playwrightInstalled = $false
         }
