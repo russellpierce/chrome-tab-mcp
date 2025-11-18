@@ -194,7 +194,7 @@ chrome-tab-mcp/
 - **npm:** v10+ (comes with Node.js)
 - **Python:** 3.10+ (3.8+ for servers)
 - **Chrome/Chromium:** Latest stable
-- **Optional:** `uv` for Python dependency management
+- **REQUIRED:** `uv` for Python dependency management
 
 ### Initial Setup
 
