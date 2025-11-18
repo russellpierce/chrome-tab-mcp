@@ -8,12 +8,12 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "test": "jest",
-    "test:install": "jest tests/installation.test.js",
-    "test:extraction": "jest tests/extraction.test.js",
-    "test:ui": "jest tests/ui.test.js",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test": "npx jest",
+    "test:install": "npx jest tests/installation.test.js",
+    "test:extraction": "npx jest tests/extraction.test.js",
+    "test:ui": "npx jest tests/ui.test.js",
+    "test:watch": "npx jest --watch",
+    "test:coverage": "npx jest --coverage"
   },
   "repository": {
     "type": "git",
