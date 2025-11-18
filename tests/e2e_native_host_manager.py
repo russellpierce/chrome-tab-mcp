@@ -14,8 +14,43 @@ Features:
 import json
 import shutil
 import sys
+import atexit
+import signal
 from pathlib import Path
 import platform
+
+# Global flag to track if we have a backup that needs restoring
+_backup_path_to_restore = None
+
+
+def _emergency_restore():
+    """Emergency restore function called on exit or signal"""
+    global _backup_path_to_restore
+    if _backup_path_to_restore and _backup_path_to_restore.exists():
+        try:
+            manifest_path = get_manifest_path()
+            shutil.copy(_backup_path_to_restore, manifest_path)
+            _backup_path_to_restore.unlink()
+            print(f"\n✓ Emergency restore completed: {manifest_path}")
+        except Exception as e:
+            print(f"\n✗ Emergency restore failed: {e}", file=sys.stderr)
+
+
+def _signal_handler(signum, frame):
+    """Handle signals by restoring manifest before exit"""
+    print(f"\nReceived signal {signum}, restoring manifest...")
+    _emergency_restore()
+    sys.exit(1)
+
+
+# Register emergency restore on exit
+atexit.register(_emergency_restore)
+
+# Register signal handlers (only on Unix-like systems)
+signal.signal(signal.SIGINT, _signal_handler)   # Ctrl+C
+signal.signal(signal.SIGTERM, _signal_handler)  # kill command
+if hasattr(signal, 'SIGHUP'):
+    signal.signal(signal.SIGHUP, _signal_handler)  # Terminal hangup
 
 
 def get_manifest_path():
@@ -39,7 +74,11 @@ def get_manifest_path():
 
 
 def backup_manifest():
-    """Backup existing native messaging host manifest"""
+    """Backup existing native messaging host manifest
+
+    Sets global flag for emergency restore on crash/exit.
+    """
+    global _backup_path_to_restore
     manifest_path = get_manifest_path()
 
     if not manifest_path.exists():
@@ -48,13 +87,22 @@ def backup_manifest():
 
     backup_path = manifest_path.with_suffix('.json.e2e-backup')
     shutil.copy(manifest_path, backup_path)
+
+    # Set global flag so emergency restore knows about this backup
+    _backup_path_to_restore = backup_path
+
     print(f"✓ Backed up manifest to {backup_path}")
+    print(f"✓ Emergency restore registered (will run on exit/crash)")
 
     return backup_path
 
 
 def restore_manifest():
-    """Restore original native messaging host manifest from backup"""
+    """Restore original native messaging host manifest from backup
+
+    Clears global flag after successful restore.
+    """
+    global _backup_path_to_restore
     manifest_path = get_manifest_path()
     backup_path = manifest_path.with_suffix('.json.e2e-backup')
 
@@ -64,6 +112,10 @@ def restore_manifest():
 
     shutil.copy(backup_path, manifest_path)
     backup_path.unlink()
+
+    # Clear global flag so emergency restore doesn't try to restore again
+    _backup_path_to_restore = None
+
     print(f"✓ Restored original manifest from backup")
 
     return True
