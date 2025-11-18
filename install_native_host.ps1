@@ -121,7 +121,7 @@ $WrapperContent = @"
 @echo off
 REM Chrome Tab Reader Native Messaging Host Wrapper
 REM This script invokes the Python native host script
-"$PythonCmd" "%~dp0chrome_tab_native_host.py" %*
+`"$PythonCmd`" "%~dp0chrome_tab_native_host.py" %*
 "@
 
 Set-Content -Path $WrapperBatFile -Value $WrapperContent -Encoding ASCII
