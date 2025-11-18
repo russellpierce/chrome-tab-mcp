@@ -1,13 +1,20 @@
-# Access Control Setup Guide
+# HTTP API Server & Access Control Setup Guide
 
 > **Note:** This document is AI-authored with human oversight.
 
-> **When This Is Relevant:** This guide applies **only if you are using the HTTP API server** (`chrome_tab_http_server.py`). If you're using the browser extension with Native Messaging (the recommended cross-platform approach), you do not need token-based authentication.
-
-The Chrome Tab Reader uses token-based authentication to secure communication between the extension and the HTTP server.
+> **When This Is Relevant:** This guide applies **only if you are using the HTTP API server** (`chrome_tab_http_server.py`). If you're using the browser extension with Native Messaging (the recommended cross-platform approach for MCP), you do not need the HTTP server or token-based authentication.
 
 ## Overview
 
+The Chrome Tab Reader HTTP API server provides a REST API for programmatic access to webpage content extraction. It uses token-based authentication to secure all endpoints.
+
+**Use Cases:**
+- Custom scripts and automation
+- Third-party integrations
+- Direct API access without MCP
+- Multi-client access with different tokens
+
+**Components:**
 - **Extension**: Generates and stores a unique access token
 - **HTTP Server**: Validates tokens for all API requests
 - **Scripts/MCP**: Must include the token in API requests
@@ -60,15 +67,32 @@ cp tokens.json.example ~/.chrome-tab-reader/tokens.json
 # Then edit ~/.chrome-tab-reader/tokens.json and add your token
 ```
 
-### 4. Start the HTTP Server
+### 4. Install Python Dependencies
 
 ```bash
+# Option A: Using uv (recommended)
+# uv handles dependencies automatically via PEP 723 inline metadata
+
+# Option B: Using pip
+pip install -r requirements.txt
+```
+
+### 5. Start the HTTP Server
+
+```bash
+# Using uv (recommended)
+uv run chrome_tab_http_server.py
+
+# Or using Python directly
 python chrome_tab_http_server.py
 ```
 
-The server will load tokens from `~/.chrome-tab-reader/tokens.json`
+The server will:
+- Load tokens from `~/.chrome-tab-reader/tokens.json`
+- Bind to `http://localhost:8888` (localhost only for security)
+- Provide OpenAPI documentation at `/docs` and `/redoc`
 
-### 5. Test Authentication
+### 6. Test Authentication
 
 Test with curl:
 
@@ -81,9 +105,40 @@ curl -H "Authorization: Bearer YOUR_TOKEN_HERE" \
      http://localhost:8888/api/health
 ```
 
-## Using Tokens in Your Scripts
+## HTTP API Usage
 
-### Python Example
+### API Documentation
+
+The HTTP server provides interactive API documentation:
+
+- **Swagger UI:** http://localhost:8888/docs
+- **ReDoc:** http://localhost:8888/redoc
+- **OpenAPI Spec:** http://localhost:8888/openapi.json
+
+### Available Endpoints
+
+**Health Check:**
+```bash
+GET /api/health
+```
+
+**Get Current Tab Info:**
+```bash
+GET /api/current_tab
+```
+
+**Extract Content:**
+```bash
+POST /api/extract
+{
+  "action": "extract_current_tab",
+  "strategy": "three-phase"
+}
+```
+
+### Using Tokens in Your Scripts
+
+**Python Example:**
 
 ```python
 import requests
