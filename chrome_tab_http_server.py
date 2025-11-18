@@ -59,20 +59,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# URL filtering for logs (configurable via environment variable)
+# Format: comma-separated list of URL patterns to exclude from logs
+# Example: CHROME_TAB_LOG_EXCLUDE_URLS="example.com,test.local"
+LOG_EXCLUDE_URLS = [
+    pattern.strip()
+    for pattern in os.getenv("CHROME_TAB_LOG_EXCLUDE_URLS", "").lower().split(",")
+    if pattern.strip()
+]
+
 
 def should_log_url(url: str) -> bool:
-    """Check if URL should be included in logs.
+    """Check if URL should be included in logs based on exclude patterns.
 
     Args:
         url: URL to check
 
     Returns:
-        bool: False if URL should be excluded from logs, True otherwise
+        bool: False if URL matches any exclude pattern, True otherwise
     """
-    if not url:
+    if not url or not LOG_EXCLUDE_URLS:
         return True
-    # Exclude example.com from logs
-    return "example.com" not in url.lower()
+    url_lower = url.lower()
+    return not any(excluded in url_lower for excluded in LOG_EXCLUDE_URLS)
 
 # Native Messaging bridge configuration
 BRIDGE_HOST = "127.0.0.1"
