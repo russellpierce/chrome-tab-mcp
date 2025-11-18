@@ -15,7 +15,6 @@ Supports full page analysis or filtered content extraction with flexible keyword
 
 from fastmcp import FastMCP
 from dotenv import load_dotenv
-import subprocess
 import requests
 import re
 import os
@@ -133,7 +132,7 @@ class BridgeConnection:
 
             # Connect
             self.sock.connect((self.host, self.port))
-            logger.info(f"✓ Successfully connected to native messaging bridge")
+            logger.info("✓ Successfully connected to native messaging bridge")
 
             # Send authentication if configured
             if self.auth_token:
@@ -152,8 +151,8 @@ class BridgeConnection:
             logger.error(f"✗ Socket connection error: {str(e)}")
             self.sock = None
             return False
-        except Exception as e:
-            logger.exception(f"✗ Unexpected connection error")
+        except Exception:
+            logger.exception("✗ Unexpected connection error")
             self.sock = None
             return False
 
@@ -285,7 +284,7 @@ def get_chrome_extension_directories() -> list[Path]:
             logger.debug(f"  Base directory does not exist: {base_dir}")
             continue
 
-        logger.debug(f"  Base directory exists, scanning for profiles...")
+        logger.debug("  Base directory exists, scanning for profiles...")
         # Check Default profile and numbered profiles (Profile 1, Profile 2, etc.)
         for profile_dir in base_dir.iterdir():
             if not profile_dir.is_dir():
@@ -447,7 +446,7 @@ def extract_tab_content_via_extension() -> dict:
             "error": error_msg
         }
 
-    logger.info(f"Extracting tab content via native messaging bridge")
+    logger.info("Extracting tab content via native messaging bridge")
 
     try:
         # Prepare extraction request
@@ -463,10 +462,10 @@ def extract_tab_content_via_extension() -> dict:
     except ConnectionError as e:
         error_msg = f"Failed to communicate with native messaging bridge: {str(e)}"
         logger.error(f"✗ {error_msg}")
-        logger.error(f"  Make sure:")
-        logger.error(f"    1. Chrome is running")
-        logger.error(f"    2. Chrome Tab Reader extension is loaded")
-        logger.error(f"    3. Native messaging host is installed")
+        logger.error("  Make sure:")
+        logger.error("    1. Chrome is running")
+        logger.error("    2. Chrome Tab Reader extension is loaded")
+        logger.error("    3. Native messaging host is installed")
         return {
             "status": "error",
             "error": error_msg
@@ -668,10 +667,10 @@ def test_bridge_connection(bridge: BridgeConnection, timeout: int = 10) -> bool:
         if not bridge.connect():
             elapsed = time.time() - start_time
             logger.error(f"✗ Bridge connection test FAILED after {elapsed:.1f} seconds: Unable to connect")
-            logger.error(f"  Make sure:")
-            logger.error(f"    1. Chrome is running")
-            logger.error(f"    2. Chrome Tab Reader extension is loaded")
-            logger.error(f"    3. Native messaging host is installed")
+            logger.error("  Make sure:")
+            logger.error("    1. Chrome is running")
+            logger.error("    2. Chrome Tab Reader extension is loaded")
+            logger.error("    3. Native messaging host is installed")
             return False
 
         # Set test timeout
@@ -692,10 +691,10 @@ def test_bridge_connection(bridge: BridgeConnection, timeout: int = 10) -> bool:
             # The important thing is that we got a response at all
             if response:
                 logger.info(f"✓ Bridge connection test SUCCESSFUL (completed in {elapsed:.1f} seconds)")
-                logger.info(f"  Native messaging bridge is responding")
+                logger.info("  Native messaging bridge is responding")
                 return True
             else:
-                logger.warning(f"✗ Bridge connection test FAILED: Empty response")
+                logger.warning("✗ Bridge connection test FAILED: Empty response")
                 return False
 
         except ConnectionError as e:
@@ -715,7 +714,7 @@ def test_bridge_connection(bridge: BridgeConnection, timeout: int = 10) -> bool:
         elapsed = time.time() - start_time
         logger.error(f"✗ Bridge connection test FAILED after {elapsed:.1f} seconds: Socket error - {str(e)}")
         return False
-    except Exception as e:
+    except Exception:
         elapsed = time.time() - start_time
         logger.exception(f"✗ Bridge connection test FAILED after {elapsed:.1f} seconds: Unexpected error")
         return False
@@ -750,7 +749,7 @@ def test_ollama_connection(ollama_url: str, model: str, timeout: int = 120) -> b
         }
 
         logger.debug(f"Sending test request to {ollama_url}/v1/chat/completions")
-        logger.info(f"  → Waiting for Ollama to respond (this may take time if model needs to load)...")
+        logger.info("  → Waiting for Ollama to respond (this may take time if model needs to load)...")
         sys.stderr.flush()  # Ensure log is visible immediately
 
         response = requests.post(
@@ -775,7 +774,7 @@ def test_ollama_connection(ollama_url: str, model: str, timeout: int = 120) -> b
             sys.stderr.flush()
             return True
         else:
-            logger.warning(f"✗ Ollama connection test FAILED: No choices in response")
+            logger.warning("✗ Ollama connection test FAILED: No choices in response")
             logger.warning(f"  Response: {data}")
             sys.stderr.flush()
             return False
@@ -884,7 +883,7 @@ def main():
             "Example: uv run chrome_tab_mcp_server.py --model llama2"
         )
 
-    logger.info(f"Configuration:")
+    logger.info("Configuration:")
     logger.info(f"  Ollama URL: {OLLAMA_BASE_URL}")
     logger.info(f"  Model: {MODEL}")
     logger.info(f"  Bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")
@@ -951,7 +950,7 @@ def main():
     logger.info("=== MCP Server Ready ===")
     logger.info(f"Total startup time: {total_elapsed:.1f} seconds")
     logger.info(f"  Bridge: {'✓ Connected' if bridge_ok else '✗ Not connected (will retry on demand)'}")
-    logger.info(f"  Ollama: ✓ Connected")
+    logger.info("  Ollama: ✓ Connected")
     logger.info("")
     sys.stderr.flush()
 

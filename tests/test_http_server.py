@@ -17,13 +17,11 @@ Requirements:
 """
 
 import pytest
-import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 # Import the FastAPI app
-from chrome_tab_http_server import app, verify_token, ChromeTabExtractor, VALID_TOKENS
+from chrome_tab_http_server import app, ChromeTabExtractor
 
 
 # ============================================================================

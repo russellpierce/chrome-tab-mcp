@@ -25,7 +25,6 @@ import struct
 import socket
 import time
 from pathlib import Path
-import io
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -106,7 +105,7 @@ def test_socket_communication():
                 "request_id": request.get("request_id")
             }
             client.sendall((json.dumps(response) + '\n').encode('utf-8'))
-            print(f"  Server: Sent response")
+            print("  Server: Sent response")
             client.close()
         except Exception as e:
             print(f"  Server error: {e}")
@@ -262,7 +261,7 @@ def test_mcp_server_function():
         result = extract_tab_content_via_extension()
 
         if result.get("status") == "success":
-            print(f"  ✓ Extraction successful")
+            print("  ✓ Extraction successful")
             print(f"  Title: {result.get('title')}")
             print(f"  URL: {result.get('url')}")
             print(f"  Content length: {len(result.get('content', ''))} characters")

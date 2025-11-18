@@ -19,20 +19,17 @@ import pytest
 import json
 import struct
 import socket
-import subprocess
 import time
 import threading
 from pathlib import Path
-from unittest.mock import Mock, patch
-import tempfile
+from unittest.mock import patch
 import sys
-import os
 import io
 
 # Add parent directory to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from chrome_tab_native_host import read_message, send_message, TCP_HOST, TCP_PORT
+from chrome_tab_native_host import read_message, send_message
 
 
 @pytest.mark.unit
@@ -86,6 +83,38 @@ class TestNativeMessagingProtocol:
         with patch('sys.stdin.buffer.read', mock_buffer.read):
             result = read_message()
             assert result is None  # Should return None on connection close
+
+    def test_large_message_handling(self):
+        """Test handling of messages larger than Python's 32 MB read limit"""
+        # Create a message with ~50 MB of content (exceeds Python's read limit)
+        large_content = "x" * (50 * 1024 * 1024)  # 50 MB of text
+        message = {
+            "status": "success",
+            "content": large_content,
+            "title": "Large Test Page",
+            "url": "https://example.com"
+        }
+
+        encoded = json.dumps(message).encode('utf-8')
+        length = len(encoded)
+
+        # Verify we're testing a message that exceeds the 32 MB limit
+        assert length > 32 * 1024 * 1024, "Test message should exceed 32 MB"
+
+        # Create properly formatted input with length prefix
+        input_data = struct.pack('=I', length) + encoded
+        mock_buffer = io.BytesIO(input_data)
+
+        # Mock stdin.buffer.read to simulate chunked reading
+        with patch('sys.stdin.buffer.read', mock_buffer.read):
+            decoded = read_message()
+
+            # Verify message was read correctly
+            assert decoded is not None
+            assert decoded["status"] == "success"
+            assert decoded["title"] == "Large Test Page"
+            assert decoded["url"] == "https://example.com"
+            assert len(decoded["content"]) == 50 * 1024 * 1024
 
 
 @pytest.mark.unit

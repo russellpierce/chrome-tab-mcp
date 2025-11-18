@@ -142,24 +142,40 @@ def read_message():
         message_length = struct.unpack('=I', raw_length)[0]
         logger.debug(f"Receiving message of length: {message_length}")
 
-        # Warn if message is very large
-        if message_length > 10 * 1024 * 1024:  # > 10 MB
-            logger.warning(f"Receiving large message: {message_length / (1024 * 1024):.1f} MB")
+        # Warn about unusually large messages
+        mb_32 = 32 * 1024 * 1024
+        if message_length > mb_32:
+            size_mb = message_length / (1024 * 1024)
+            logger.warning(f"Receiving very large message: {size_mb:.1f} MB ({message_length} bytes)")
 
-        # Read the message content in chunks to avoid Python's 32 MB read limit
-        # (sys.stdin.buffer.read() raises ValueError for sizes > 33554432 bytes)
-        CHUNK_SIZE = 1048576  # 1 MB chunks
+        # Read the message content in chunks to bypass Python's 32 MB read limit
         message_bytes = b''
         remaining = message_length
+        chunk_size = 1024 * 1024  # 1 MB chunks
+        mb_32_threshold = 32 * 1024 * 1024
 
         while remaining > 0:
-            chunk_size = min(CHUNK_SIZE, remaining)
-            chunk = sys.stdin.buffer.read(chunk_size)
+            to_read = min(chunk_size, remaining)
+            chunk = sys.stdin.buffer.read(to_read)
             if not chunk:
-                logger.error(f"Unexpected EOF while reading message (got {len(message_bytes)}/{message_length} bytes)")
+                logger.error(f"Connection closed while reading message (got {len(message_bytes)}/{message_length} bytes)")
                 return None
             message_bytes += chunk
             remaining -= len(chunk)
+
+            # Debug logging for large messages (after first 32 MB)
+            bytes_read = len(message_bytes)
+            if bytes_read > mb_32_threshold and bytes_read % chunk_size == 0:
+                # Log first 1000 bytes of each MB after 32 MB
+                mb_count = bytes_read // (1024 * 1024)
+                sample_start = bytes_read - chunk_size
+                sample_end = min(sample_start + 1000, bytes_read)
+                sample = message_bytes[sample_start:sample_end]
+                try:
+                    sample_preview = sample.decode('utf-8', errors='replace')[:200]
+                except:
+                    sample_preview = repr(sample[:200])
+                logger.warning(f"Large message: {mb_count} MB read. Sample from MB {mb_count}: {sample_preview}")
 
         if len(message_bytes) != message_length:
             logger.error(f"Expected {message_length} bytes, got {len(message_bytes)}")
@@ -173,8 +189,8 @@ def read_message():
     except ValueError as e:
         logger.error(f"Error reading message: {e}")
         return None
-    except Exception as e:
-        logger.exception(f"Unexpected error reading message")
+    except Exception:
+        logger.exception("Unexpected error reading message")
         return None
 
 
@@ -377,7 +393,8 @@ def handle_mcp_client(client_socket):
         }
         try:
             client_socket.sendall((json.dumps(error_response) + '\n').encode('utf-8'))
-        except:
+        except (OSError, socket.error):
+            # Expected error when client disconnects before receiving error response
             pass
     finally:
         client_socket.close()
@@ -390,7 +407,7 @@ def socket_server_thread():
     """
     global extension_connected
 
-    emergency_log(f"Starting TCP server thread...")
+    emergency_log("Starting TCP server thread...")
 
     # Create TCP socket
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -413,7 +430,7 @@ def socket_server_thread():
 
     try:
         while True:
-            logger.debug(f"Waiting for MCP client connection...")
+            logger.debug("Waiting for MCP client connection...")
             client_socket, client_addr = server.accept()
             logger.info(f"✓ MCP client connected from {client_addr}")
 

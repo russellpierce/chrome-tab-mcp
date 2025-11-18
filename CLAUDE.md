@@ -10,6 +10,7 @@ This guide helps AI assistants (like Claude Code) understand the Chrome Tab Read
 - [Architecture Overview](#architecture-overview)
 - [Directory Structure](#directory-structure)
 - [Development Setup](#development-setup)
+  - [Cloud/Web Environment Limitations](#cloudweb-environment-limitations)
 - [Code Conventions](#code-conventions)
 - [Testing Strategy](#testing-strategy)
 - [Git Workflow](#git-workflow)
@@ -277,6 +278,46 @@ uv run pytest tests/test_native_messaging.py -v -m "not integration and not e2e"
 # Or run separately
 npm test                    # Extension tests (Jest + Puppeteer)
 ./run_tests.sh unit         # Python unit tests
+```
+
+### Cloud/Web Environment Limitations
+
+**PowerShell Testing:**
+
+The repository includes PowerShell test scripts (`run_tests.ps1`) for Windows environments. However, PowerShell cannot be installed in cloud/web environments (like Claude Code web interface) due to:
+
+1. **Network restrictions** - External downloads from GitHub releases are blocked
+2. **Package manager limitations** - `apt` repositories require privileged access and have network restrictions
+3. **Security policies** - Installation of system-level tools is restricted
+
+**Workarounds:**
+- **Syntax validation**: PowerShell scripts can still be edited and syntax-checked using standard text tools
+- **Local testing**: Test PowerShell scripts in local environments with PowerShell installed
+- **Cross-platform testing**: Use `run_tests.sh` (Bash) for CI-safe testing in cloud environments
+- **Dual scripts**: The project maintains both Bash (`run_tests.sh`) and PowerShell (`run_tests.ps1`) versions for cross-platform compatibility
+
+**PowerShell Installation (Local Environments Only):**
+```bash
+# Ubuntu/Debian
+wget https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/powershell-7.4.6-linux-x64.tar.gz
+mkdir -p ~/.local/bin/powershell
+tar -xzf powershell-7.4.6-linux-x64.tar.gz -C ~/.local/bin/powershell
+ln -s ~/.local/bin/powershell/pwsh ~/.local/bin/pwsh
+
+# Windows
+# Already installed or via winget: winget install Microsoft.PowerShell
+
+# macOS
+brew install --cask powershell
+```
+
+**Environment Detection:**
+```bash
+# Check if running in restricted environment
+if ! curl -s -o /dev/null -w "%{http_code}" https://github.com 2>&1 | grep -q "200"; then
+    echo "Running in restricted cloud/web environment"
+    echo "Use ./run_tests.sh ci for testing"
+fi
 ```
 
 ---
@@ -818,6 +859,72 @@ def get_config_dir() -> Path:
 - Use message passing between service worker and content scripts
 - Check extension/ARCHITECTURE.md for detailed message flow
 
+### 9. PowerShell Line Endings (CRITICAL)
+
+**Issue:** PowerShell scripts fail with cryptic parser errors like "Try statement is missing its Catch or Finally block" or "Unexpected token '{' in expression or statement".
+
+**Root Cause:**
+PowerShell on Windows **requires CRLF (`\r\n`) line endings**. If PowerShell files have Unix LF (`\n`) line endings, the parser completely fails to parse the script structure, resulting in misleading error messages.
+
+**How to Detect:**
+```bash
+# Check line endings
+file run_tests.ps1
+
+# Good output (Windows):
+# run_tests.ps1: a pwsh script, Unicode text, UTF-8 text executable, with CRLF line terminators
+
+# Bad output (Unix):
+# run_tests.ps1: a pwsh script, Unicode text, UTF-8 text executable
+# (notice missing "with CRLF line terminators")
+```
+
+**Solution:**
+
+The repository uses **automated line ending enforcement**:
+
+1. **`.gitattributes` (automatic)**: Ensures PowerShell files always checkout with CRLF
+   ```gitattributes
+   *.ps1 text eol=crlf
+   *.psm1 text eol=crlf
+   *.psd1 text eol=crlf
+   ```
+
+2. **Git hooks (optional but recommended)**: Pre-commit validation
+   ```bash
+   # Enable Git hooks
+   git config core.hooksPath .githooks
+
+   # The pre-commit hook will automatically check line endings
+   # See .githooks/README.md for details
+   ```
+
+3. **Manual fix (if needed):**
+   ```bash
+   # Convert to CRLF
+   sed -i 's/$/\r/' file.ps1
+
+   # Or use dos2unix tools
+   unix2dos file.ps1
+
+   # Or let Git re-normalize
+   git rm --cached file.ps1
+   git add file.ps1
+   ```
+
+**Prevention:**
+- Always enable Git hooks: `git config core.hooksPath .githooks`
+- The `.gitattributes` file automatically handles line endings on checkout
+- Never edit PowerShell files on Linux/macOS without ensuring CRLF preservation
+- Use editors that respect `.gitattributes` (VS Code, Vim with proper config)
+
+**Why This Is Critical:**
+PowerShell parser errors from line ending issues are extremely hard to debug because:
+- Error messages point to wrong lines (usually `} else {` blocks)
+- Parser reports structural errors even though syntax is correct
+- The issue only manifests on Windows, making it platform-specific
+- Can block all PowerShell script execution in the repository
+
 ---
 
 ## Dependencies
@@ -901,5 +1008,5 @@ When making changes to this repository:
 ---
 
 **Last Updated:** 2025-11-18
-**Document Version:** 1.0
+**Document Version:** 1.2
 **Maintainer:** Russell Pierce (with AI assistance)
