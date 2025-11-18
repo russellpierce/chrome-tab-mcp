@@ -460,7 +460,9 @@ git push -u origin claude/<your-branch-name>
 
 ### Creating Pull Requests
 
-**Use GitHub CLI (`gh`):**
+**Note:** The GitHub CLI (`gh`) is not available in all environments (e.g., web-based Claude Code), but is available in local Claude installations.
+
+**When `gh` is available:**
 ```bash
 # Ensure you're on the correct branch
 git status
@@ -480,6 +482,18 @@ gh pr create --title "Add feature X" --body "$(cat <<'EOF'
 - [ ] Verify HTTP API still works with token auth
 EOF
 )"
+```
+
+**When `gh` is not available:**
+```bash
+# Push changes
+git push -u origin claude/<branch-name>
+
+# Then inform the user that the branch is pushed and provide:
+# 1. The branch name
+# 2. A summary of changes made
+# 3. Suggested PR title and description
+# The user can create the PR manually via GitHub web interface
 ```
 
 ---
