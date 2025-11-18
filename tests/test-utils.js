@@ -70,6 +70,8 @@ async function launchBrowserWithExtension(options = {}) {
 
   // Find Chrome executable path
   const chromePaths = [
+    // User override (highest priority)
+    process.env.CHROME_PATH,
     // Windows paths
     process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Google\\Chrome\\Application\\chrome.exe') : null,
     'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -82,9 +84,7 @@ async function launchBrowserWithExtension(options = {}) {
     '/usr/bin/google-chrome-stable',
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
-    '/snap/bin/chromium',
-    // User override
-    process.env.CHROME_PATH
+    '/snap/bin/chromium'
   ].filter(Boolean);
 
   let executablePath = null;
