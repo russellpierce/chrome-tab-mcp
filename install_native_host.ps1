@@ -1,17 +1,1 @@
-# Check execution policy
-$Policy = Get-ExecutionPolicy -Scope CurrentUser
-if ($Policy -eq 'Restricted' -or $Policy -eq 'Undefined') {
-    Write-Host "PowerShell script execution is currently restricted." -ForegroundColor Red
-    Write-Host ""
-    Write-Host "To allow this script to run, execute the following command:" -ForegroundColor Yellow
-    Write-Host "  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "Then run this script again." -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "This will allow locally created scripts to run while still requiring" -ForegroundColor Gray
-    Write-Host "downloaded scripts to be signed by a trusted publisher." -ForegroundColor Gray
-    exit 1
-}
-
-# Convert to Windows line endings and execute
-(Get-Content -Raw .\_install_native_host.ps1) -replace "`r`n", "`n" -replace "`n", "`r`n" | Set-Content .\_install_native_host.ps1; & .\_install_native_host.ps1 @args
+$Policy = Get-ExecutionPolicy -Scope CurrentUser; if ($Policy -eq 'Restricted' -or $Policy -eq 'Undefined') { Write-Host "PowerShell script execution is currently restricted." -ForegroundColor Red; Write-Host ""; Write-Host "To allow this script to run, execute the following command:" -ForegroundColor Yellow; Write-Host "  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor Cyan; Write-Host ""; Write-Host "Then run this script again." -ForegroundColor Yellow; Write-Host ""; Write-Host "This will allow locally created scripts to run while still requiring" -ForegroundColor Gray; Write-Host "downloaded scripts to be signed by a trusted publisher." -ForegroundColor Gray; exit 1 } else { (Get-Content -Raw .\_install_native_host.ps1) -replace "`r`n", "`n" -replace "`n", "`r`n" | Set-Content .\_install_native_host.ps1; & .\_install_native_host.ps1 @args }
