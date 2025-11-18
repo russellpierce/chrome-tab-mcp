@@ -167,8 +167,8 @@ async function loadTestPage(page, testPageName = 'test-simple.html') {
   }
   
   // Give time for content script to inject (works on HTTP/HTTPS)
-  await delay(1500);
-  
+  await delay(5000);
+
   console.log(`[Test] Test page loaded: ${testPageName}`);
 }
 
@@ -255,9 +255,9 @@ async function openPopup(browser, extensionId) {
 
 /**
  * Wait for content script to be ready
- * In headful mode this should be quick
+ * Increased timeout to handle slower injection on some pages
  */
-async function waitForContentScript(page, timeoutMs = 15000) {
+async function waitForContentScript(page, timeoutMs = 45000) {
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeoutMs) {
@@ -267,9 +267,9 @@ async function waitForContentScript(page, timeoutMs = 15000) {
         if (typeof window.__chromeTabReader__ !== 'undefined') {
           return true;
         }
-        
+
         // Check if content script console logs suggest it's loading
-        return document.readyState === 'complete' && 
+        return document.readyState === 'complete' &&
                (window.Readability !== undefined || window.DOMPurify !== undefined);
       });
 

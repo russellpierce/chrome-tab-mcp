@@ -332,9 +332,45 @@ async function extractContent(strategy = 'three-phase') {
 - Constants: `UPPER_SNAKE_CASE` (e.g., `BRIDGE_HOST`, `DEFAULT_SYSTEM_PROMPT`)
 
 **Error Handling:**
-- Use FastAPI's HTTPException for API errors
+- **NEVER catch bare exceptions** - Always catch specific exception types (e.g., `OSError`, `ValueError`, `ConnectionError`)
+- Only catch exceptions you can actually handle - let others propagate
 - Log errors with appropriate levels (INFO, WARNING, ERROR)
+- **When logging at ERROR level:** Use `logger.exception()` for unexpected errors (captures stack trace) vs `logger.error()` for expected errors (no stack trace needed)
+- For expected exceptions where you don't need a stack trace, use `logger.error()` or `logger.warning()`
+- Use FastAPI's HTTPException for API errors
 - Return structured error responses with details
+
+**Exception Handling Examples:**
+```python
+# GOOD: Specific exceptions, logger.exception() for unexpected errors
+try:
+    sock.close()
+except (OSError, socket.error):
+    # Expected error when closing socket - no stack trace needed
+    pass
+
+try:
+    result = some_operation()
+except ValueError as e:
+    logger.error(f"Invalid value: {e}")  # Expected error, no stack trace
+    raise
+except Exception as e:
+    logger.exception(f"Unexpected error")  # Unexpected - capture stack trace
+    raise
+
+# BAD: Bare exception
+try:
+    sock.close()
+except:  # ❌ Don't do this - too broad
+    pass
+
+# BAD: Using logger.error() for unexpected exceptions
+try:
+    result = some_operation()
+except Exception as e:
+    logger.error(f"Error: {e}")  # ❌ Missing stack trace
+    raise
+```
 
 **Example:**
 ```python

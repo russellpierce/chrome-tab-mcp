@@ -69,6 +69,144 @@ BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = 8765
 
 
+class BridgeConnection:
+    """Manages persistent connection to the native messaging bridge."""
+
+    def __init__(self, host: str, port: int, auth_token: str | None = None):
+        self.host = host
+        self.port = port
+        self.auth_token = auth_token
+        self.sock = None
+        self._lock = None
+
+    def connect(self) -> bool:
+        """Establish connection to the bridge.
+
+        Returns:
+            bool: True if connection successful, False otherwise
+        """
+        try:
+            logger.info(f"Connecting to native messaging bridge at {self.host}:{self.port}")
+
+            # Close existing connection if any
+            if self.sock:
+                try:
+                    self.sock.close()
+                except (OSError, socket.error):
+                    # Ignore errors when closing old socket
+                    pass
+                self.sock = None
+
+            # Create new socket
+            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.settimeout(60)  # 60 second timeout
+
+            # Connect
+            self.sock.connect((self.host, self.port))
+            logger.info(f"✓ Successfully connected to native messaging bridge")
+
+            # Send authentication if configured
+            if self.auth_token:
+                logger.debug("Sending authentication token")
+                auth_line = f"AUTH {self.auth_token}\n"
+                self.sock.sendall(auth_line.encode('utf-8'))
+                logger.debug("Authentication sent")
+
+            return True
+
+        except ConnectionRefusedError:
+            logger.error(f"✗ Connection refused at {self.host}:{self.port}")
+            self.sock = None
+            return False
+        except (OSError, socket.error) as e:
+            logger.error(f"✗ Socket connection error: {str(e)}")
+            self.sock = None
+            return False
+        except Exception as e:
+            logger.exception(f"✗ Unexpected connection error")
+            self.sock = None
+            return False
+
+    def is_connected(self) -> bool:
+        """Check if connection is active."""
+        return self.sock is not None
+
+    def send_request(self, request: dict) -> dict:
+        """Send request to bridge and receive response.
+
+        Args:
+            request: Request dictionary to send
+
+        Returns:
+            dict: Response from bridge
+
+        Raises:
+            ConnectionError: If connection fails
+        """
+        # Ensure we're connected
+        if not self.is_connected():
+            logger.info("Connection lost, reconnecting...")
+            if not self.connect():
+                raise ConnectionError("Failed to connect to native messaging bridge")
+
+        try:
+            logger.debug(f"Sending request: {request}")
+            request_json = json.dumps(request) + '\n'
+            self.sock.sendall(request_json.encode('utf-8'))
+
+            # Receive response
+            logger.debug("Waiting for response from native messaging bridge...")
+            response_data = b''
+            while True:
+                chunk = self.sock.recv(4096)
+                if not chunk:
+                    # Connection closed by remote
+                    logger.warning("Connection closed by bridge, will reconnect on next request")
+                    self.sock = None
+                    raise ConnectionError("Bridge closed connection")
+                response_data += chunk
+                if b'\n' in response_data:
+                    break
+
+            if not response_data:
+                logger.error("No response from bridge")
+                self.sock = None
+                raise ConnectionError("No response from native messaging bridge")
+
+            # Parse response
+            response = json.loads(response_data.decode('utf-8').strip())
+            logger.info(f"✓ Received response: status={response.get('status')}, content_length={len(response.get('content', ''))}")
+            logger.debug(f"Response details: title={response.get('title')}, url={response.get('url')}")
+            return response
+
+        except socket.timeout:
+            logger.error("✗ Timeout waiting for bridge response")
+            self.sock = None
+            raise ConnectionError("Timeout waiting for extension response (60 seconds)")
+        except (socket.error, OSError) as e:
+            logger.error(f"✗ Socket error: {str(e)}")
+            self.sock = None
+            raise ConnectionError(f"Socket error: {str(e)}")
+        except json.JSONDecodeError as e:
+            logger.error(f"✗ Invalid JSON response: {str(e)}")
+            raise ConnectionError(f"Invalid JSON from bridge: {str(e)}")
+
+    def close(self):
+        """Close the connection."""
+        if self.sock:
+            try:
+                self.sock.close()
+                logger.info("Bridge connection closed")
+            except (OSError, socket.error):
+                # Ignore errors when closing socket
+                pass
+            self.sock = None
+
+
+# Global bridge connection instance (initialized in main())
+bridge_connection: BridgeConnection | None = None
+
+
 def get_chrome_extension_directories() -> list[Path]:
     """
     Get Chrome extension directories for all profiles on the current platform.
@@ -263,88 +401,55 @@ def extract_tab_content_via_extension() -> dict:
     """
     Extract content from current Chrome tab via Native Messaging bridge.
 
+    Uses the global persistent bridge connection with automatic reconnection on failure.
+
     Returns:
         dict: Response from extension with 'status', 'content', 'title', 'url', etc.
     """
-    logger.info(f"Attempting to connect to native messaging bridge at {BRIDGE_HOST}:{BRIDGE_PORT}")
+    global bridge_connection
+
+    if bridge_connection is None:
+        error_msg = "Bridge connection not initialized. Server may not have started properly."
+        logger.error(f"✗ {error_msg}")
+        return {
+            "status": "error",
+            "error": error_msg
+        }
+
+    logger.info(f"Extracting tab content via native messaging bridge")
+
     try:
-        # Connect to TCP bridge
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(60)  # 60 second timeout
-
-        try:
-            sock.connect((BRIDGE_HOST, BRIDGE_PORT))
-            logger.info(f"✓ Successfully connected to native messaging bridge")
-        except ConnectionRefusedError:
-            error_msg = f"Native messaging bridge is not running on {BRIDGE_HOST}:{BRIDGE_PORT}. Please ensure:\n1. Chrome extension is installed\n2. Native messaging host is installed\n3. Chrome is running with the extension loaded"
-            logger.error(f"✗ Connection refused: {error_msg}")
-            return {
-                "status": "error",
-                "error": error_msg
-            }
-        except Exception as e:
-            error_msg = f"Failed to connect to native messaging bridge at {BRIDGE_HOST}:{BRIDGE_PORT}: {str(e)}"
-            logger.error(f"✗ Connection error: {error_msg}")
-            return {
-                "status": "error",
-                "error": error_msg
-            }
-
-        # Send authentication if token is configured
-        if BRIDGE_AUTH_TOKEN:
-            logger.debug("Sending authentication token")
-            auth_line = f"AUTH {BRIDGE_AUTH_TOKEN}\n"
-            sock.sendall(auth_line.encode('utf-8'))
-        else:
-            logger.debug("No authentication token configured")
-
-        # Send extraction request
+        # Prepare extraction request
         request = {
             "action": "extract_current_tab",
             "strategy": "three-phase"
         }
 
-        logger.debug(f"Sending extraction request: {request}")
-        request_json = json.dumps(request) + '\n'
-        sock.sendall(request_json.encode('utf-8'))
-
-        # Receive response
-        logger.debug("Waiting for response from native messaging bridge...")
-        response_data = b''
-        while True:
-            chunk = sock.recv(4096)
-            if not chunk:
-                break
-            response_data += chunk
-            if b'\n' in response_data:
-                break
-
-        sock.close()
-
-        if not response_data:
-            error_msg = "No response from native messaging bridge"
-            logger.error(f"✗ {error_msg}")
-            return {
-                "status": "error",
-                "error": error_msg
-            }
-
-        # Parse response
-        response = json.loads(response_data.decode('utf-8').strip())
-        logger.info(f"✓ Received response: status={response.get('status')}, content_length={len(response.get('content', ''))}")
-        logger.debug(f"Response details: title={response.get('title')}, url={response.get('url')}")
+        # Send request via persistent connection (handles reconnection automatically)
+        response = bridge_connection.send_request(request)
         return response
 
-    except socket.timeout:
-        error_msg = "Timeout waiting for extension response (60 seconds)"
+    except ConnectionError as e:
+        error_msg = f"Failed to communicate with native messaging bridge: {str(e)}"
+        logger.error(f"✗ {error_msg}")
+        logger.error(f"  Make sure:")
+        logger.error(f"    1. Chrome is running")
+        logger.error(f"    2. Chrome Tab Reader extension is loaded")
+        logger.error(f"    3. Native messaging host is installed")
+        return {
+            "status": "error",
+            "error": error_msg
+        }
+    except json.JSONDecodeError as e:
+        error_msg = f"Invalid JSON response from bridge: {str(e)}"
         logger.error(f"✗ {error_msg}")
         return {
             "status": "error",
             "error": error_msg
         }
     except Exception as e:
-        error_msg = f"Error communicating with extension: {str(e)}"
-        logger.error(f"✗ {error_msg}", exc_info=True)
+        error_msg = f"Unexpected error communicating with extension: {str(e)}"
+        logger.exception(f"✗ {error_msg}")
         return {
             "status": "error",
             "error": error_msg
@@ -510,6 +615,79 @@ def find_extension_id() -> str:
             f"Platform: {platform.system()}",
         ]
         return "\n".join(output)
+
+
+def test_bridge_connection(bridge: BridgeConnection, timeout: int = 10) -> bool:
+    """Test connection to native messaging bridge.
+
+    Args:
+        bridge: BridgeConnection instance to test
+        timeout: Timeout in seconds (default: 10 seconds)
+
+    Returns:
+        bool: True if connection successful, False otherwise
+    """
+    logger.info(f"Testing native messaging bridge connection at {bridge.host}:{bridge.port}...")
+    logger.info(f"  Timeout: {timeout} seconds")
+
+    start_time = time.time()
+
+    try:
+        # Try to connect
+        if not bridge.connect():
+            elapsed = time.time() - start_time
+            logger.error(f"✗ Bridge connection test FAILED after {elapsed:.1f} seconds: Unable to connect")
+            logger.error(f"  Make sure:")
+            logger.error(f"    1. Chrome is running")
+            logger.error(f"    2. Chrome Tab Reader extension is loaded")
+            logger.error(f"    3. Native messaging host is installed")
+            return False
+
+        # Set test timeout
+        original_timeout = bridge.sock.gettimeout() if bridge.sock else 60
+        if bridge.sock:
+            bridge.sock.settimeout(timeout)
+
+        # Send a simple ping request to verify the connection works
+        test_request = {
+            "action": "ping"
+        }
+
+        try:
+            response = bridge.send_request(test_request)
+            elapsed = time.time() - start_time
+
+            # Check if we got a valid response (even if it's an error about unknown action)
+            # The important thing is that we got a response at all
+            if response:
+                logger.info(f"✓ Bridge connection test SUCCESSFUL (completed in {elapsed:.1f} seconds)")
+                logger.info(f"  Native messaging bridge is responding")
+                return True
+            else:
+                logger.warning(f"✗ Bridge connection test FAILED: Empty response")
+                return False
+
+        except ConnectionError as e:
+            elapsed = time.time() - start_time
+            logger.error(f"✗ Bridge connection test FAILED after {elapsed:.1f} seconds: {str(e)}")
+            return False
+        finally:
+            # Restore original timeout
+            if bridge.sock:
+                bridge.sock.settimeout(original_timeout)
+
+    except socket.timeout:
+        elapsed = time.time() - start_time
+        logger.error(f"✗ Bridge connection test FAILED: Timeout after {elapsed:.1f} seconds")
+        return False
+    except (OSError, socket.error) as e:
+        elapsed = time.time() - start_time
+        logger.error(f"✗ Bridge connection test FAILED after {elapsed:.1f} seconds: Socket error - {str(e)}")
+        return False
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.exception(f"✗ Bridge connection test FAILED after {elapsed:.1f} seconds: Unexpected error")
+        return False
 
 
 def test_ollama_connection(ollama_url: str, model: str, timeout: int = 120) -> bool:
@@ -683,6 +861,35 @@ def main():
     logger.info("")
     sys.stderr.flush()
 
+    # Initialize bridge connection
+    global bridge_connection
+    bridge_connection = BridgeConnection(BRIDGE_HOST, BRIDGE_PORT, BRIDGE_AUTH_TOKEN)
+    logger.info("Bridge connection manager initialized")
+    logger.info("")
+    sys.stderr.flush()
+
+    # Test bridge connection
+    logger.info("=== Testing Native Messaging Bridge Connection ===")
+    sys.stderr.flush()
+
+    bridge_test_start = time.time()
+    bridge_ok = test_bridge_connection(bridge_connection, timeout=10)
+    bridge_test_elapsed = time.time() - bridge_test_start
+
+    logger.info(f"Bridge connection test completed in {bridge_test_elapsed:.1f} seconds")
+    logger.info("")
+    sys.stderr.flush()
+
+    if not bridge_ok:
+        logger.warning("⚠ WARNING: Native messaging bridge connection test failed!")
+        logger.warning("  MCP server will start, but Chrome tab extraction will not work until:")
+        logger.warning("    1. Chrome is running")
+        logger.warning("    2. Chrome Tab Reader extension is loaded")
+        logger.warning("    3. Native messaging host is installed and running")
+        logger.warning("  The bridge will automatically reconnect when these requirements are met.")
+        logger.warning("")
+        sys.stderr.flush()
+
     # Test Ollama connection before starting server
     logger.info("=== Testing Ollama Connection ===")
     logger.info("NOTE: This may take up to 2 minutes if the model needs to be loaded into memory")
@@ -712,6 +919,8 @@ def main():
     total_elapsed = time.time() - startup_time
     logger.info("=== MCP Server Ready ===")
     logger.info(f"Total startup time: {total_elapsed:.1f} seconds")
+    logger.info(f"  Bridge: {'✓ Connected' if bridge_ok else '✗ Not connected (will retry on demand)'}")
+    logger.info(f"  Ollama: ✓ Connected")
     logger.info("")
     sys.stderr.flush()
 
