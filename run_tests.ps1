@@ -128,7 +128,7 @@ switch ($TestType) {
             Write-Host "Playwright browsers need to be installed to run e2e tests."
             Write-Host "This will download Chromium (approximately 150-300 MB)."
             Write-Host ""
-            $response = Read-Host "Install Playwright browsers now using 'uv run playwright install chromium'? (y/n)"
+            $response = Read-Host "Install Playwright browsers now? (y/n)"
 
             if ($response -match "^[Yy]") {
                 Write-Info "Installing Playwright browsers..."
@@ -279,9 +279,9 @@ switch ($TestType) {
         Write-Host "  ✗ Local only:   integration, e2e, extension, manual (Chrome required)"
         Write-Host ""
         Write-Host "Environment Setup:"
-        Write-Host "  The 'e2e' test mode automatically checks environment setup and will"
+        Write-Host "  The e2e test mode automatically checks environment setup and will"
         Write-Host "  prompt to install missing dependencies (e.g., Playwright browsers)"
-        Write-Host "  within uv's managed .venv"
+        Write-Host "  within uv managed .venv"
         Write-Host ""
         Write-Host "Examples:"
         Write-Host "  .\run_tests.ps1              # Run all tests"
@@ -290,12 +290,12 @@ switch ($TestType) {
         Write-Host "  .\run_tests.ps1 manual       # Test actual Chrome connection"
         Write-Host "  .\run_tests.ps1 e2e          # Full end-to-end test (auto-setup)"
         Write-Host ""
-        Write-Host "Note: All tests use 'uv run' to ensure consistent Python environment"
+        Write-Host "Note: All tests use uv run to ensure consistent Python environment"
     }
 
     default {
         Write-Error-Msg "Unknown test type: $TestType"
-        Write-Host "Run '.\run_tests.ps1 help' for usage"
+        Write-Host "Run .\run_tests.ps1 help for usage"
         exit 1
     }
 }
