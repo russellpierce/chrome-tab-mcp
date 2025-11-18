@@ -1,6 +1,6 @@
 # Access Control Setup Guide
 
-> **Note:** This document is AI-authored with human oversight.
+> **Note:** This document is AI-authored with very limited human oversight.
 
 > **When This Is Relevant:** This guide applies **only if you are using the HTTP API server** (`chrome_tab_http_server.py`). If you're using the browser extension with Native Messaging (the recommended cross-platform approach), you do not need token-based authentication.
 

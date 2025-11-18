@@ -1,6 +1,6 @@
 # CLAUDE.md - AI Assistant Development Guide
 
-> **Note:** This document is AI-authored with almost no human oversight.
+> **Note:** This document is AI-authored with very limited human oversight.
 
 This guide helps AI assistants (like Claude Code) understand the Chrome Tab Reader codebase structure, development workflows, and conventions. It serves as a comprehensive reference for working effectively with this repository.
 
@@ -337,9 +337,9 @@ def get_chrome_extension_directories() -> list[Path]:
 
 ### Documentation
 
-**All documentation is AI-authored with human oversight** - always include this note:
+**All documentation is AI-authored with very limited human oversight** - always include this note:
 ```markdown
-> **Note:** This document is AI-authored with human oversight.
+> **Note:** This document is AI-authored with very limited human oversight.
 ```
 
 **Markdown Conventions:**

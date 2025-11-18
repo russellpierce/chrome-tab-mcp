@@ -1,6 +1,6 @@
 # Browser Extension Testing & Verification Plan
 
-> **Note:** This document is AI-authored with human oversight.
+> **Note:** This document is AI-authored with very limited human oversight.
 
 ## Communication Architecture Clarification
 

@@ -1,6 +1,6 @@
 # Browser Extension Setup & Installation
 
-> **Note:** This document is AI-authored with human oversight.
+> **Note:** This document is AI-authored with very limited human oversight.
 
 ## Quick Start
 

@@ -1,6 +1,6 @@
 # Chrome Tab Reader Extension - Automated Tests
 
-> **Note:** This document is AI-authored with human oversight.
+> **Note:** This document is AI-authored with very limited human oversight.
 
 This directory contains automated tests for the Chrome Tab Reader extension. These tests verify that the extension can be installed and works as expected.
 
