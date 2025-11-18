@@ -241,19 +241,42 @@ chrome-tab-mcp/
 
 ### Verification
 
+The repository includes a comprehensive test runner script:
+
 ```bash
-# Test Node.js setup
-npm test -- --testNamePattern="File Structure"
+# Quick verification (no Chrome needed - works in web environments)
+./run_tests.sh ci
 
-# Test extension installation (requires Chrome)
-npm run test:install
+# Full test suite (requires Chrome locally)
+./run_tests.sh all
 
-# Test HTTP server (requires extension + tokens)
-python -m pytest tests/test_http_server.py -m unit
+# Specific test categories
+./run_tests.sh unit         # Python unit tests
+./run_tests.sh extension    # npm extension tests (requires Chrome)
+./run_tests.sh e2e          # End-to-end tests (requires Chrome)
 
-# Run all tests
-npm test
-python -m pytest tests/
+# See all options
+./run_tests.sh help
+```
+
+**For web environments (Claude Code web, GitHub Actions):**
+```bash
+# CI-safe tests (no Chrome required)
+./run_tests.sh ci
+
+# Or manually run Python unit tests
+uv run pytest tests/test_http_server.py -v
+uv run pytest tests/test_native_messaging.py -v -m "not integration and not e2e"
+```
+
+**For local environments with Chrome:**
+```bash
+# Run all tests (Python + npm extension tests)
+./run_tests.sh all
+
+# Or run separately
+npm test                    # Extension tests (Jest + Puppeteer)
+./run_tests.sh unit         # Python unit tests
 ```
 
 ---
@@ -378,31 +401,50 @@ def get_chrome_extension_directories() -> list[Path]:
 
 ### Running Tests
 
+**Using the test runner (recommended):**
 ```bash
-# JavaScript Tests
-npm test                    # All tests
+./run_tests.sh              # Run all tests (default)
+./run_tests.sh ci           # CI-safe tests (no Chrome - for web environments)
+./run_tests.sh unit         # Python unit tests only
+./run_tests.sh extension    # npm extension tests (requires Chrome)
+./run_tests.sh e2e          # End-to-end tests (requires Chrome + Playwright)
+./run_tests.sh manual       # Interactive manual tests
+./run_tests.sh coverage     # Tests with coverage report
+./run_tests.sh help         # Show all options
+```
+
+**Manual test commands:**
+```bash
+# JavaScript/Extension Tests (requires Chrome locally)
+npm test                    # All extension tests
 npm run test:install        # Installation only
 npm run test:extraction     # Extraction only
 npm run test:ui             # UI only
 npm run test:watch          # Watch mode
 npm run test:coverage       # With coverage report
 
-# Python Tests
-pytest tests/                           # All tests
-pytest tests/test_http_server.py        # HTTP server only
-pytest -m unit                          # Unit tests only
-pytest -m integration                   # Integration tests
-pytest -m e2e                           # E2E tests
-pytest --cov                            # With coverage
+# Python Tests (use uv run for proper environment)
+uv run pytest tests/                           # All tests
+uv run pytest tests/test_http_server.py        # HTTP server only
+uv run pytest -m unit                          # Unit tests only (CI-safe)
+uv run pytest -m integration                   # Integration tests (local only)
+uv run pytest -m e2e                           # E2E tests (local only)
+uv run pytest --cov                            # With coverage
 ```
 
 ### CI/CD
 
 **GitHub Actions:** `.github/workflows/test-extension.yml`
 - Triggers on push to `main`, `master`, `develop`, `claude/*` branches
-- Runs file structure tests only (browser tests are local-only)
+- Runs file structure tests only (via npm test with pattern filter)
 - Node.js 20 environment
 - Skips Puppeteer download to save time
+
+**For more comprehensive CI testing:**
+The `./run_tests.sh ci` command runs all CI-safe tests including:
+- Python unit tests (HTTP server, native messaging protocol)
+- No Chrome required - works in web environments and GitHub Actions
+- Uses `uv run` for proper Python environment management
 
 ---
 
@@ -420,8 +462,11 @@ pytest --cov                            # With coverage
 
 1. **Run tests before committing:**
    ```bash
-   npm test                # JavaScript tests
-   pytest tests/ -m unit   # Python unit tests
+   # In web environments (Claude Code web) - run CI-safe tests
+   ./run_tests.sh ci
+
+   # In local environments with Chrome - run all tests
+   ./run_tests.sh all
    ```
 
 2. **Commit message format:**
