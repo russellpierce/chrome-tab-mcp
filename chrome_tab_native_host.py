@@ -81,14 +81,21 @@ try:
     emergency_log("Setting up logging infrastructure...")
 
     class DualHandler(logging.Handler):
-        """Log to both file and stderr"""
+        """Log to both file and stderr with UTF-8 encoding"""
         def __init__(self, filename):
             super().__init__()
-            self.file_handler = logging.FileHandler(filename)
+            self.file_handler = logging.FileHandler(filename, encoding='utf-8')
             self.stream_handler = logging.StreamHandler(sys.stderr)
             formatter = logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s')
             self.file_handler.setFormatter(formatter)
             self.stream_handler.setFormatter(formatter)
+
+            # Reconfigure stderr to use UTF-8 encoding (fixes Windows cp1252 encoding issues)
+            if hasattr(sys.stderr, 'reconfigure'):
+                sys.stderr.reconfigure(encoding='utf-8')
+            elif hasattr(sys.stderr, 'buffer'):
+                import io
+                sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', line_buffering=True)
 
         def emit(self, record):
             try:
