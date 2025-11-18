@@ -59,6 +59,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# URL filtering for logs (configurable via environment variable)
+# Format: comma-separated list of URL patterns to exclude from logs
+# Example: CHROME_TAB_LOG_EXCLUDE_URLS="example.com,test.local"
+LOG_EXCLUDE_URLS = [
+    pattern.strip()
+    for pattern in os.getenv("CHROME_TAB_LOG_EXCLUDE_URLS", "").lower().split(",")
+    if pattern.strip()
+]
+
+
+def should_log_url(url: str) -> bool:
+    """Check if URL should be included in logs based on exclude patterns.
+
+    Args:
+        url: URL to check
+
+    Returns:
+        bool: False if URL matches any exclude pattern, True otherwise
+    """
+    if not url or not LOG_EXCLUDE_URLS:
+        return True
+    url_lower = url.lower()
+    return not any(excluded in url_lower for excluded in LOG_EXCLUDE_URLS)
+
 # Native Messaging bridge configuration
 BRIDGE_HOST = "127.0.0.1"
 BRIDGE_PORT = 8765
@@ -391,7 +415,8 @@ class ChromeTabExtractor:
     @staticmethod
     def navigate_and_extract(url: str, wait_for_ms: int = 0) -> Dict[str, Any]:
         """Navigate to URL and extract content via Native Messaging bridge"""
-        logger.info(f"Navigate and extract: {url}")
+        if should_log_url(url):
+            logger.info(f"Navigate and extract: {url}")
 
         request = {
             "action": "navigate_and_extract",
@@ -613,7 +638,8 @@ async def navigate_and_extract(
 
     The extension uses the three-phase extraction process by default.
     """
-    logger.info(f"Navigate and extract request: url={request.url}, strategy={request.strategy}")
+    if should_log_url(request.url):
+        logger.info(f"Navigate and extract request: url={request.url}, strategy={request.strategy}")
     result = ChromeTabExtractor.navigate_and_extract(request.url, request.wait_for_ms)
 
     if result.get("status") != "success":
