@@ -210,11 +210,11 @@ chrome-tab-mcp/
 
 3. **Install Python dependencies:**
    ```bash
-   # Option A: Using uv (recommended, handles PEP 723 metadata)
+   # Option A: Using uv (recommended, handles PEP 723 metadata automatically)
    uv run chrome_tab_http_server.py --help
 
-   # Option B: Using pip
-   pip install -r requirements.txt
+   # Option B: Using uv to install from requirements.txt
+   uv pip install -r requirements.txt
    ```
 
 4. **Load extension in Chrome:**
@@ -677,11 +677,11 @@ uvicorn chrome_tab_http_server:app --reload
 
 ### 6. Python PEP 723 Dependencies
 
-**Issue:** Manual `pip install` doesn't match script metadata.
+**Issue:** Dependencies not installed correctly.
 
 **Solution:**
 - Use `uv run` (preferred): `uv run chrome_tab_http_server.py`
-- Or install from `requirements.txt`: `pip install -r requirements.txt`
+- Or install from `requirements.txt`: `uv pip install -r requirements.txt`
 - PEP 723 metadata is in script comments (/// script ///), not pyproject.toml
 
 ### 7. Cross-Platform Path Differences

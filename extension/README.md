@@ -267,7 +267,7 @@ extension/
 
 ```bash
 # Install dependencies (MCP server)
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 # Load extension in Chrome
 # - chrome://extensions → Load unpacked → select extension/

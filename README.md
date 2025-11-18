@@ -101,8 +101,8 @@ npm install
 # Option A: Using uv (recommended)
 # uv handles dependencies automatically via PEP 723 inline metadata
 
-# Option B: Using pip
-pip install -r requirements.txt
+# Option B: Using uv pip
+uv pip install -r requirements.txt
 ```
 
 ### 5. Start Using It!
@@ -195,9 +195,9 @@ If you want to use the HTTP API:
    uv run chrome_tab_http_server.py
    ```
 
-   **Option B - Using pip:**
+   **Option B - Using uv pip:**
    ```bash
-   pip install -r requirements.txt
+   uv pip install -r requirements.txt
    python chrome_tab_http_server.py
    ```
 

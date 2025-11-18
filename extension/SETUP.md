@@ -108,7 +108,7 @@ From project root:
 
 ```bash
 # First time: install dependencies
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 
 # Run with Ollama on localhost
 python chrome_tab_mcp_server.py --ollama-url http://localhost:11434 --model llama2
@@ -403,7 +403,7 @@ Submit to Chrome Web Store:
 
 1. Check Python version: `python --version` (need 3.8+)
 2. Check dependencies: `pip list | grep fastmcp`
-3. Missing dependency? `pip install fastmcp requests`
+3. Missing dependency? `uv pip install fastmcp requests python-dotenv`
 4. Port 3000 already in use? `lsof -i :3000`
 
 ### Ollama won't respond
