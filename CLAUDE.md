@@ -10,6 +10,7 @@ This guide helps AI assistants (like Claude Code) understand the Chrome Tab Read
 - [Architecture Overview](#architecture-overview)
 - [Directory Structure](#directory-structure)
 - [Development Setup](#development-setup)
+  - [Cloud/Web Environment Limitations](#cloudweb-environment-limitations)
 - [Code Conventions](#code-conventions)
 - [Testing Strategy](#testing-strategy)
 - [Git Workflow](#git-workflow)
@@ -277,6 +278,46 @@ uv run pytest tests/test_native_messaging.py -v -m "not integration and not e2e"
 # Or run separately
 npm test                    # Extension tests (Jest + Puppeteer)
 ./run_tests.sh unit         # Python unit tests
+```
+
+### Cloud/Web Environment Limitations
+
+**PowerShell Testing:**
+
+The repository includes PowerShell test scripts (`run_tests.ps1`) for Windows environments. However, PowerShell cannot be installed in cloud/web environments (like Claude Code web interface) due to:
+
+1. **Network restrictions** - External downloads from GitHub releases are blocked
+2. **Package manager limitations** - `apt` repositories require privileged access and have network restrictions
+3. **Security policies** - Installation of system-level tools is restricted
+
+**Workarounds:**
+- **Syntax validation**: PowerShell scripts can still be edited and syntax-checked using standard text tools
+- **Local testing**: Test PowerShell scripts in local environments with PowerShell installed
+- **Cross-platform testing**: Use `run_tests.sh` (Bash) for CI-safe testing in cloud environments
+- **Dual scripts**: The project maintains both Bash (`run_tests.sh`) and PowerShell (`run_tests.ps1`) versions for cross-platform compatibility
+
+**PowerShell Installation (Local Environments Only):**
+```bash
+# Ubuntu/Debian
+wget https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/powershell-7.4.6-linux-x64.tar.gz
+mkdir -p ~/.local/bin/powershell
+tar -xzf powershell-7.4.6-linux-x64.tar.gz -C ~/.local/bin/powershell
+ln -s ~/.local/bin/powershell/pwsh ~/.local/bin/pwsh
+
+# Windows
+# Already installed or via winget: winget install Microsoft.PowerShell
+
+# macOS
+brew install --cask powershell
+```
+
+**Environment Detection:**
+```bash
+# Check if running in restricted environment
+if ! curl -s -o /dev/null -w "%{http_code}" https://github.com 2>&1 | grep -q "200"; then
+    echo "Running in restricted cloud/web environment"
+    echo "Use ./run_tests.sh ci for testing"
+fi
 ```
 
 ---
@@ -901,5 +942,5 @@ When making changes to this repository:
 ---
 
 **Last Updated:** 2025-11-18
-**Document Version:** 1.0
+**Document Version:** 1.1
 **Maintainer:** Russell Pierce (with AI assistance)
