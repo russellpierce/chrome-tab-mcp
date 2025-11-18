@@ -1,0 +1,28 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Python files should use LF
+*.py text eol=lf
+
+# Shell scripts should use LF
+*.sh text eol=lf
+
+# Windows batch files must use CRLF
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# JavaScript/Node files should use LF
+*.js text eol=lf
+*.json text eol=lf
+
+# Markdown and documentation
+*.md text eol=lf
+
+# Explicitly declare files as binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
