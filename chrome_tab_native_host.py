@@ -142,8 +142,25 @@ def read_message():
         message_length = struct.unpack('=I', raw_length)[0]
         logger.debug(f"Receiving message of length: {message_length}")
 
-        # Read the message content
-        message_bytes = sys.stdin.buffer.read(message_length)
+        # Warn if message is very large
+        if message_length > 10 * 1024 * 1024:  # > 10 MB
+            logger.warning(f"Receiving large message: {message_length / (1024 * 1024):.1f} MB")
+
+        # Read the message content in chunks to avoid Python's 32 MB read limit
+        # (sys.stdin.buffer.read() raises ValueError for sizes > 33554432 bytes)
+        CHUNK_SIZE = 1048576  # 1 MB chunks
+        message_bytes = b''
+        remaining = message_length
+
+        while remaining > 0:
+            chunk_size = min(CHUNK_SIZE, remaining)
+            chunk = sys.stdin.buffer.read(chunk_size)
+            if not chunk:
+                logger.error(f"Unexpected EOF while reading message (got {len(message_bytes)}/{message_length} bytes)")
+                return None
+            message_bytes += chunk
+            remaining -= len(chunk)
+
         if len(message_bytes) != message_length:
             logger.error(f"Expected {message_length} bytes, got {len(message_bytes)}")
             return None
@@ -153,8 +170,11 @@ def read_message():
         logger.debug(f"Received from extension: {message}")
         return message
 
+    except ValueError as e:
+        logger.error(f"Error reading message: {e}")
+        return None
     except Exception as e:
-        logger.error(f"Error reading message: {e}", exc_info=True)
+        logger.exception(f"Unexpected error reading message")
         return None
 
 
