@@ -1,5 +1,7 @@
 # Chrome Tab Reader Extension - Architecture
 
+> **Note:** This document is AI-authored with human oversight.
+
 ## Overview
 
 A Chrome/Chromium browser extension that provides cross-platform (Mac/Windows/Linux) webpage content extraction and AI analysis. The extension communicates with a localhost MCP server to process content through Ollama.

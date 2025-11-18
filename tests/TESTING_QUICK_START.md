@@ -1,5 +1,7 @@
 # Quick Start - Automated Testing
 
+> **Note:** This document is AI-authored with human oversight.
+
 This guide will help you quickly run automated tests to verify the Chrome Tab Reader extension works correctly on your system.
 
 ## Prerequisites

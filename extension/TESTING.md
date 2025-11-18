@@ -1,8 +1,10 @@
 # Browser Extension Testing Plan
 
+> **Note:** This document is AI-authored with human oversight.
+
 ## Quick Reference
 
-**Full test plan:** See `/BROWSER_EXTENSION_TESTING.md` at project root
+**Full test plan:** See `/tests/BROWSER_EXTENSION_TESTING.md`
 
 This document provides a condensed testing checklist for extension development.
 

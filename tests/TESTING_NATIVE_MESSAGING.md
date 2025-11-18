@@ -1,5 +1,7 @@
 # Testing Native Messaging Integration
 
+> **Note:** This document is AI-authored with human oversight.
+
 This directory contains tests for the Native Messaging integration between the MCP server and Chrome extension.
 
 ## Test Levels

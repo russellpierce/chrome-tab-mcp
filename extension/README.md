@@ -1,5 +1,7 @@
 # Chrome Tab Reader Browser Extension
 
+> **Note:** This document is AI-authored with human oversight.
+
 A sophisticated browser extension that extracts and analyzes webpage content using AI, powered by a local Ollama server.
 
 ## Overview
@@ -148,7 +150,7 @@ Change analysis approach:
 
 ### Full Project Documentation
 
-See `/BROWSER_EXTENSION_DESIGN.md` and `/BROWSER_EXTENSION_TESTING.md` at project root for comprehensive design and testing specifications.
+See `/tests/BROWSER_EXTENSION_TESTING.md` for comprehensive testing specifications.
 
 ## System Requirements
 
