@@ -1,5 +1,7 @@
 # Chrome Tab Reader
 
+> **Note:** This document is AI-authored with human oversight.
+
 ![Test Extension](https://github.com/russellpierce/chrome-tab-mcp/actions/workflows/test-extension.yml/badge.svg)
 
 Extract and analyze content from Chrome tabs using AI. Supports multiple access methods: Chrome extension, HTTP API, and MCP server.
@@ -227,7 +229,7 @@ This will:
 - ✅ Test content extraction functionality
 - ✅ Test the UI and popup
 
-**Quick Start:** See [TESTING_QUICK_START.md](TESTING_QUICK_START.md)
+**Quick Start:** See [tests/TESTING_QUICK_START.md](tests/TESTING_QUICK_START.md)
 
 **Detailed Guide:** See [tests/README.md](tests/README.md)
 
@@ -235,7 +237,7 @@ This will:
 
 For comprehensive manual testing, see:
 - `extension/TESTING.md` - Testing checklist
-- `BROWSER_EXTENSION_TESTING.md` - Detailed testing guide
+- `tests/BROWSER_EXTENSION_TESTING.md` - Detailed testing guide
 
 ### Run Tests During Development
 
@@ -419,10 +421,9 @@ http://localhost:8888/
 - **Architecture:** `extension/ARCHITECTURE.md`
 - **Testing Guide:** `extension/TESTING.md`
 - **Test Documentation:** `tests/README.md`
-- **Quick Testing:** `TESTING_QUICK_START.md`
+- **Quick Testing:** `tests/TESTING_QUICK_START.md`
 - **Access Control:** `ACCESS_CONTROL_SETUP.md`
-- **MCP Server:** `README_MCP.md`
-- **Design Docs:** `BROWSER_EXTENSION_DESIGN.md`, `DESIGN.md`
+- **Native Messaging Setup:** `NATIVE_MESSAGING_SETUP.md`
 
 ## Troubleshooting
 
