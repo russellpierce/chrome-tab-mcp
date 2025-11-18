@@ -15,6 +15,8 @@ param(
     [string]$TestType = "all"
 )
 
+$CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe"
+
 # Set error action preference
 $ErrorActionPreference = "Stop"
 
