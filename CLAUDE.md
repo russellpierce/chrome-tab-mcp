@@ -153,7 +153,9 @@ chrome-tab-mcp/
 ├── requirements.txt             # Python dependencies
 ├── pytest.ini                   # Pytest configuration
 │
-├── README.md                    # Main project documentation
+├── README.md                    # Main project documentation (MCP focused)
+├── README_MCP.md                # MCP server detailed documentation
+├── README_HTTP.md               # HTTP API detailed documentation
 ├── NATIVE_MESSAGING_SETUP.md    # Native messaging setup guide
 ├── ACCESS_CONTROL_SETUP.md      # Token authentication guide
 ├── CLAUDE.md                    # This file (AI assistant guide)
@@ -173,8 +175,8 @@ chrome-tab-mcp/
 - `extension/manifest.json` - Extension permissions and configuration
 
 **Python Servers:**
-- `chrome_tab_http_server.py` - HTTP API (FastAPI, port 8888, token auth)
-- `chrome_tab_mcp_server.py` - MCP server (FastMCP, Ollama, native messaging)
+- `chrome_tab_mcp_server.py` - MCP server (FastMCP, Ollama, native messaging) - **Primary use case**
+- `chrome_tab_http_server.py` - HTTP API (FastAPI, port 8888, token auth) - Alternative access
 - `chrome_tab_native_host.py` - Native messaging bridge (TCP server on 8765)
 
 **Testing:**
@@ -973,7 +975,9 @@ PowerShell parser errors from line ending issues are extremely hard to debug bec
 
 ### Documentation Files
 
-- **README.md** - Main project documentation, quick start guide
+- **README.md** - Main project documentation, MCP-focused quick start
+- **README_MCP.md** - MCP server detailed documentation (architecture, tools, troubleshooting)
+- **README_HTTP.md** - HTTP API detailed documentation (endpoints, authentication, examples)
 - **extension/ARCHITECTURE.md** - Detailed architecture and message flow
 - **extension/SETUP.md** - Extension installation and configuration
 - **extension/TESTING.md** - Extension testing procedures
