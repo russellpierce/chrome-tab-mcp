@@ -110,53 +110,75 @@ class BridgeConnection:
         self.sock = None
         self._lock = None
 
-    def connect(self) -> bool:
-        """Establish connection to the bridge.
+    def connect(self, max_retries: int = 3, initial_delay: float = 1.0) -> bool:
+        """Establish connection to the bridge with exponential backoff.
+
+        Args:
+            max_retries: Maximum number of connection attempts (default: 3)
+            initial_delay: Initial delay between retries in seconds (default: 1.0)
 
         Returns:
             bool: True if connection successful, False otherwise
         """
-        try:
-            logger.info(f"Connecting to native messaging bridge at {self.host}:{self.port}")
+        logger.info(f"Connecting to native messaging bridge at {self.host}:{self.port}")
 
-            # Close existing connection if any
-            if self.sock:
-                try:
-                    self.sock.close()
-                except (OSError, socket.error):
-                    # Ignore errors when closing old socket
-                    pass
+        for attempt in range(max_retries):
+            try:
+                # Close existing connection if any
+                if self.sock:
+                    try:
+                        self.sock.close()
+                    except (OSError, socket.error):
+                        # Ignore errors when closing old socket
+                        pass
+                    self.sock = None
+
+                # Create new socket
+                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.sock.settimeout(60)  # 60 second timeout
+
+                # Connect
+                self.sock.connect((self.host, self.port))
+                logger.info(f"✓ Successfully connected to native messaging bridge (attempt {attempt + 1}/{max_retries})")
+
+                # Send authentication if configured
+                if self.auth_token:
+                    logger.debug("Sending authentication token")
+                    auth_line = f"AUTH {self.auth_token}\n"
+                    self.sock.sendall(auth_line.encode('utf-8'))
+                    logger.debug("Authentication sent")
+
+                return True
+
+            except ConnectionRefusedError:
                 self.sock = None
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)
+                    logger.warning(f"✗ Connection refused (attempt {attempt + 1}/{max_retries}), retrying in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"✗ Connection refused at {self.host}:{self.port} after {max_retries} attempts")
+                    return False
+            except (OSError, socket.error) as e:
+                self.sock = None
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)
+                    logger.warning(f"✗ Socket error (attempt {attempt + 1}/{max_retries}): {str(e)}, retrying in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"✗ Socket connection error after {max_retries} attempts: {str(e)}")
+                    return False
+            except Exception:
+                self.sock = None
+                if attempt < max_retries - 1:
+                    delay = initial_delay * (2 ** attempt)
+                    logger.warning(f"✗ Unexpected error (attempt {attempt + 1}/{max_retries}), retrying in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    logger.exception("✗ Unexpected connection error")
+                    return False
 
-            # Create new socket
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.settimeout(300)  # 5 minute timeout
-
-            # Connect
-            self.sock.connect((self.host, self.port))
-            logger.info("✓ Successfully connected to native messaging bridge")
-
-            # Send authentication if configured
-            if self.auth_token:
-                logger.debug("Sending authentication token")
-                auth_line = f"AUTH {self.auth_token}\n"
-                self.sock.sendall(auth_line.encode('utf-8'))
-                logger.debug("Authentication sent")
-
-            return True
-
-        except ConnectionRefusedError:
-            logger.error(f"✗ Connection refused at {self.host}:{self.port}")
-            self.sock = None
-            return False
-        except (OSError, socket.error) as e:
-            logger.error(f"✗ Socket connection error: {str(e)}")
-            self.sock = None
-            return False
-        except Exception:
-            logger.exception("✗ Unexpected connection error")
-            self.sock = None
-            return False
+        return False
 
     def is_connected(self) -> bool:
         """Check if connection is active."""
@@ -189,23 +211,47 @@ class BridgeConnection:
             logger.debug("Waiting for response from native messaging bridge...")
             response_data = b''
             while True:
-                chunk = self.sock.recv(4096)
-                if not chunk:
-                    # Connection closed by remote
-                    logger.warning("Connection closed by bridge, will reconnect on next request")
-                    self.sock = None
-                    raise ConnectionError("Bridge closed connection")
-                response_data += chunk
-                if b'\n' in response_data:
-                    break
+                try:
+                    chunk = self.sock.recv(4096)
+                    if not chunk:
+                        # Connection closed by remote
+                        # Check if we already have a complete response
+                        if response_data and b'\n' in response_data:
+                            logger.debug("Connection closed after receiving complete response")
+                            break
+                        logger.warning("Connection closed by bridge, will reconnect on next request")
+                        self.sock = None
+                        raise ConnectionError("Bridge closed connection")
+                    response_data += chunk
+                    # Check for newline (message delimiter)
+                    if b'\n' in response_data:
+                        break
+                except (socket.error, OSError) as e:
+                    # On Windows, socket shutdown can raise WinError 10053 or similar
+                    # If we already have a complete response, treat this as success
+                    if response_data and b'\n' in response_data:
+                        logger.debug(f"Socket error after receiving complete response (treating as success): {str(e)}")
+                        break
+                    # Otherwise, re-raise the error
+                    raise
 
             if not response_data:
                 logger.error("No response from bridge")
                 self.sock = None
                 raise ConnectionError("No response from native messaging bridge")
 
+            # Extract message up to first newline
+            # (JSON encoding ensures newlines in strings are escaped)
+            newline_pos = response_data.index(b'\n')
+            message_data = response_data[:newline_pos]
+
             # Parse response
-            response = json.loads(response_data.decode('utf-8').strip())
+            try:
+                response = json.loads(message_data.decode('utf-8'))
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}")
+                logger.error(f"Raw data (first 500 bytes): {message_data[:500]}")
+                raise ConnectionError(f"Invalid JSON from bridge: {str(e)}")
             logger.info(f"✓ Received response: status={response.get('status')}, content_length={len(response.get('content', ''))}")
             if should_log_url(response.get('url')):
                 logger.debug(f"Response details: title={response.get('title')}, url={response.get('url')}")
@@ -219,9 +265,9 @@ class BridgeConnection:
             logger.error(f"✗ Socket error: {str(e)}")
             self.sock = None
             raise ConnectionError(f"Socket error: {str(e)}")
-        except json.JSONDecodeError as e:
-            logger.error(f"✗ Invalid JSON response: {str(e)}")
-            raise ConnectionError(f"Invalid JSON from bridge: {str(e)}")
+        except ConnectionError:
+            # Re-raise ConnectionError from JSON parsing or other connection issues
+            raise
 
     def close(self):
         """Close the connection."""
