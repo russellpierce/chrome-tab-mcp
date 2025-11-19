@@ -128,7 +128,7 @@ class BridgeConnection:
 
             # Create new socket
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.settimeout(300)  # 5 minute timeout
+            self.sock.settimeout(60)  # 60 second timeout
 
             # Connect
             self.sock.connect((self.host, self.port))
@@ -212,7 +212,7 @@ class BridgeConnection:
         except socket.timeout:
             logger.error("✗ Timeout waiting for bridge response")
             self.sock = None
-            raise ConnectionError("Timeout waiting for extension response (5 minutes)")
+            raise ConnectionError("Timeout waiting for extension response (60 seconds)")
         except (socket.error, OSError) as e:
             logger.error(f"✗ Socket error: {str(e)}")
             self.sock = None
@@ -423,7 +423,8 @@ mcp = FastMCP(
     - Custom keywords: Filter specific sections (start/end parameters)
 
     Uses local Ollama server with Qwen3-30B-A3B-Thinking model.
-    """
+    """,
+    request_timeout=300  # 5 minute timeout for long-running operations
 )
 
 
