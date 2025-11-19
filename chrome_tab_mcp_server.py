@@ -62,7 +62,7 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 MODEL = os.getenv("OLLAMA_MODEL")
 BRIDGE_AUTH_TOKEN = os.getenv("BRIDGE_AUTH_TOKEN")  # Optional auth token for native bridge
 OLLAMA_CONTEXT_LENGTH = os.getenv("OLLAMA_CONTEXT_LENGTH")  # Optional context length (num_ctx)
-CHROME_EXTENSION_ID = os.getenv("CHROME_EXTENSION_ID")  # Optional - will auto-detect if not provided
+CHROME_EXTENSION_ID = os.getenv("CHROME_EXTENSION_ID")  # Optional extension ID for better error messages
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Process the attached webpage. "
@@ -676,6 +676,7 @@ def find_extension_id() -> str:
             - Extension version number
             - Chrome profile path where installed
             - Installation instructions for native messaging host
+            - Configured extension ID if provided via CLI or env var
             - Error details if extension not found
 
     Examples:
@@ -710,7 +711,16 @@ def find_extension_id() -> str:
     result = detect_chrome_tab_reader_extension()
 
     if result["found"]:
-        output = ["Chrome Tab Reader Extension Detected!", ""]
+        output = []
+
+        # Show configured extension ID if available
+        if CHROME_EXTENSION_ID:
+            output.append("Configured Extension ID (from CLI/env):")
+            output.append(f"  {CHROME_EXTENSION_ID}")
+            output.append("")
+
+        output.append("Chrome Tab Reader Extension Detected!")
+        output.append("")
 
         # Show each instance
         for detail in result["details"]:
@@ -726,6 +736,16 @@ def find_extension_id() -> str:
             output.append("All instances have the same ID (as expected)." if len(set(result["extension_ids"])) == 1 else "WARNING: Different IDs found in different profiles!")
             output.append("")
 
+        # Check if configured ID matches detected ID
+        if CHROME_EXTENSION_ID and result["extension_ids"]:
+            if CHROME_EXTENSION_ID in result["extension_ids"]:
+                output.append("✓ Configured extension ID matches detected installation")
+            else:
+                output.append("⚠ WARNING: Configured extension ID does not match detected installation!")
+                output.append(f"  Configured: {CHROME_EXTENSION_ID}")
+                output.append(f"  Detected: {result['extension_ids'][0]}")
+            output.append("")
+
         # Add usage instructions
         output.append("To configure native messaging, run:")
         output.append(f"  ./install_native_host.sh {result['extension_ids'][0]}")
@@ -736,7 +756,15 @@ def find_extension_id() -> str:
         return "\n".join(output)
     else:
         error_msg = result.get("error", "Unknown error")
-        output = [
+        output = []
+
+        # Show configured extension ID if available
+        if CHROME_EXTENSION_ID:
+            output.append("Configured Extension ID (from CLI/env):")
+            output.append(f"  {CHROME_EXTENSION_ID}")
+            output.append("")
+
+        output.extend([
             "Chrome Tab Reader Extension NOT Found",
             "",
             f"Error: {error_msg}",
@@ -747,7 +775,7 @@ def find_extension_id() -> str:
             "3. Ensure Chrome is installed (checked directories for Chrome and Chromium)",
             "",
             f"Platform: {platform.system()}",
-        ]
+        ])
         return "\n".join(output)
 
 
@@ -1162,10 +1190,20 @@ def main():
         default=None
     )
 
+    parser.add_argument(
+        "--extension-id",
+        type=str,
+        help="Chrome Tab Reader extension ID (optional). "
+             "Used for better error messages and troubleshooting. "
+             "If not provided, will attempt to auto-detect. "
+             "Can also be set via CHROME_EXTENSION_ID environment variable.",
+        default=None
+    )
+
     args = parser.parse_args()
 
     # Apply command-line overrides to global configuration
-    global OLLAMA_BASE_URL, MODEL, BRIDGE_AUTH_TOKEN, OLLAMA_CONTEXT_LENGTH
+    global OLLAMA_BASE_URL, MODEL, BRIDGE_AUTH_TOKEN, OLLAMA_CONTEXT_LENGTH, CHROME_EXTENSION_ID
 
     if args.ollama_url:
         OLLAMA_BASE_URL = args.ollama_url
@@ -1178,6 +1216,9 @@ def main():
 
     if args.context_length:
         OLLAMA_CONTEXT_LENGTH = str(args.context_length)
+
+    if args.extension_id:
+        CHROME_EXTENSION_ID = args.extension_id
 
     # Validate that configuration is provided
     if not OLLAMA_BASE_URL:
@@ -1200,6 +1241,7 @@ def main():
     logger.info(f"  Context Length: {OLLAMA_CONTEXT_LENGTH if OLLAMA_CONTEXT_LENGTH else 'default (model-specific)'}")
     logger.info(f"  Bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")
     logger.info(f"  Bridge Auth: {'ENABLED' if BRIDGE_AUTH_TOKEN else 'DISABLED'}")
+    logger.info(f"  Extension ID: {CHROME_EXTENSION_ID if CHROME_EXTENSION_ID else 'AUTO-DETECT'}")
     logger.info("")
     sys.stderr.flush()
 
