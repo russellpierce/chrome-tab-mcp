@@ -25,51 +25,6 @@
 
 ## Quick Start
 
-**Using the MCP Server (with Ollama):**
-```bash
-# Required environment variables
-export OLLAMA_BASE_URL="http://localhost:11434"
-export OLLAMA_MODEL="llama2"
-
-# Start the MCP server
-uv run chrome_tab_mcp_server.py --ollama-url $OLLAMA_BASE_URL --model $OLLAMA_MODEL
-
-# Or with optional parameters (authentication, extension ID, context length)
-export BRIDGE_AUTH_TOKEN="your-token-here"
-export CHROME_EXTENSION_ID="your-extension-id-here"
-uv run chrome_tab_mcp_server.py \
-  --ollama-url $OLLAMA_BASE_URL \
-  --model $OLLAMA_MODEL \
-  --bridge-auth-token $BRIDGE_AUTH_TOKEN \
-  --extension-id $CHROME_EXTENSION_ID \
-  --context-length 8192
-```
-
-**Optional: Native Messaging Bridge with Authentication**
-```bash
-# Default (no auth required)
-python chrome_tab_native_host.py
-
-# With authentication enabled
-python chrome_tab_native_host.py --require-auth
-```
-
-**Key Environment Variables:**
-- `OLLAMA_BASE_URL` - URL of your Ollama server (e.g., `http://localhost:11434`)
-- `OLLAMA_MODEL` - Model to use (e.g., `llama2`, `qwen`)
-- `OLLAMA_CONTEXT_LENGTH` - Optional context window size (e.g., `8192`)
-- `BRIDGE_AUTH_TOKEN` - Optional auth token for native bridge (get from extension popup)
-- `CHROME_EXTENSION_ID` - Optional extension ID (auto-detected if not provided, find at chrome://extensions/)
-
-**Configuration Files:**
-- Linux: `~/.config/chrome-tab-reader/tokens.json`
-- macOS: `~/Library/Application Support/chrome-tab-reader/tokens.json`
-- Windows: `%APPDATA%\chrome-tab-reader\tokens.json`
-
----
-
-## Quick Start (MCP Server)
-
 ### Prerequisites
 
 - **Chrome/Chromium** browser
@@ -148,6 +103,15 @@ Open Claude Code and ask:
 You should see all components connected. Then try:
 
 > "Summarize the current webpage I have open in Chrome"
+
+### Advanced Configuration
+
+**Optional CLI Parameters:**
+- `--context-length 8192` - Increase Ollama context window for larger pages
+- `--extension-id <id>` - Manually specify extension ID (auto-detected by default)
+- `--bridge-auth-token <token>` - Enable authentication (see [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md))
+
+**For authentication and HTTP server setup**, see [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md).
 
 ---
 
