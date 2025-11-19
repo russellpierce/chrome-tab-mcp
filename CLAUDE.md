@@ -4,6 +4,18 @@
 
 This guide helps AI assistants (like Claude Code) understand the Chrome Tab Reader codebase structure, development workflows, and conventions. It serves as a comprehensive reference for working effectively with this repository.
 
+## ⚠️ Important Directives
+
+### PowerShell Scripts (.ps1 files)
+
+**DO NOT modify PowerShell files unless explicitly asked:**
+- Never commit changes to `.ps1` files unless the user specifically requests modifications to PowerShell scripts
+- Ignore uncommitted changes showing on `.ps1` files in git status
+- These files may show as modified due to `.gitattributes` line ending enforcement, but should be left alone
+- If the stop hook complains about uncommitted `.ps1` changes, leave them uncommitted
+
+**Why:** PowerShell scripts are platform-specific (Windows) and line ending management is complex. Changes should only be made when explicitly requested by the user.
+
 ## Table of Contents
 
 - [Repository Overview](#repository-overview)
