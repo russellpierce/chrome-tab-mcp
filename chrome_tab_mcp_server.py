@@ -61,6 +61,7 @@ for handler in logging.getLogger().handlers:
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 MODEL = os.getenv("OLLAMA_MODEL")
 BRIDGE_AUTH_TOKEN = os.getenv("BRIDGE_AUTH_TOKEN")  # Optional auth token for native bridge
+OLLAMA_CONTEXT_LENGTH = os.getenv("OLLAMA_CONTEXT_LENGTH")  # Optional context length (num_ctx)
 CHROME_EXTENSION_ID = os.getenv("CHROME_EXTENSION_ID")  # Optional - will auto-detect if not provided
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -601,6 +602,12 @@ def process_chrome_tab(
         "stream": False,
         "enable_thinking": True
     }
+
+    # Add context length (num_ctx) if configured
+    if OLLAMA_CONTEXT_LENGTH:
+        payload["options"] = {
+            "num_ctx": int(OLLAMA_CONTEXT_LENGTH)
+        }
 
     # Call Ollama API
     try:
@@ -1144,10 +1151,21 @@ def main():
         default=None
     )
 
+    parser.add_argument(
+        "--context-length",
+        type=int,
+        help="Context length (num_ctx) for Ollama model (optional). "
+             "Controls the context window size in tokens. "
+             "Default varies by model (typically 2048). "
+             "Can also be set via OLLAMA_CONTEXT_LENGTH environment variable. "
+             "Example: --context-length 8192",
+        default=None
+    )
+
     args = parser.parse_args()
 
     # Apply command-line overrides to global configuration
-    global OLLAMA_BASE_URL, MODEL, BRIDGE_AUTH_TOKEN
+    global OLLAMA_BASE_URL, MODEL, BRIDGE_AUTH_TOKEN, OLLAMA_CONTEXT_LENGTH
 
     if args.ollama_url:
         OLLAMA_BASE_URL = args.ollama_url
@@ -1157,6 +1175,9 @@ def main():
 
     if args.bridge_auth_token:
         BRIDGE_AUTH_TOKEN = args.bridge_auth_token
+
+    if args.context_length:
+        OLLAMA_CONTEXT_LENGTH = str(args.context_length)
 
     # Validate that configuration is provided
     if not OLLAMA_BASE_URL:
@@ -1176,6 +1197,7 @@ def main():
     logger.info("Configuration:")
     logger.info(f"  Ollama URL: {OLLAMA_BASE_URL}")
     logger.info(f"  Model: {MODEL}")
+    logger.info(f"  Context Length: {OLLAMA_CONTEXT_LENGTH if OLLAMA_CONTEXT_LENGTH else 'default (model-specific)'}")
     logger.info(f"  Bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")
     logger.info(f"  Bridge Auth: {'ENABLED' if BRIDGE_AUTH_TOKEN else 'DISABLED'}")
     logger.info("")
