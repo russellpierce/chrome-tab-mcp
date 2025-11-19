@@ -61,6 +61,7 @@ for handler in logging.getLogger().handlers:
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 MODEL = os.getenv("OLLAMA_MODEL")
 BRIDGE_AUTH_TOKEN = os.getenv("BRIDGE_AUTH_TOKEN")  # Optional auth token for native bridge
+CHROME_EXTENSION_ID = os.getenv("CHROME_EXTENSION_ID")  # Optional - will auto-detect if not provided
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Process the attached webpage. "
@@ -743,6 +744,43 @@ def find_extension_id() -> str:
         return "\n".join(output)
 
 
+def get_extension_id() -> tuple[str | None, str]:
+    """Get the Chrome Tab Reader extension ID.
+
+    Tries in order:
+    1. CHROME_EXTENSION_ID environment variable (highest priority)
+    2. Auto-detection by scanning Chrome extension directories
+
+    Returns:
+        tuple[str | None, str]: (extension_id, source_description)
+            extension_id: The detected extension ID, or None if not found
+            source_description: Human-readable description of where the ID came from
+    """
+    # Try environment variable first
+    if CHROME_EXTENSION_ID:
+        # Validate format (32 lowercase letters)
+        if len(CHROME_EXTENSION_ID) == 32 and CHROME_EXTENSION_ID.isalpha() and CHROME_EXTENSION_ID.islower():
+            return CHROME_EXTENSION_ID, "environment variable CHROME_EXTENSION_ID"
+        else:
+            logger.warning(f"CHROME_EXTENSION_ID env var has invalid format: {CHROME_EXTENSION_ID}")
+            logger.warning("  Extension IDs must be 32 lowercase letters (a-z)")
+            logger.warning("  Falling back to auto-detection...")
+
+    # Try auto-detection
+    logger.info("Auto-detecting Chrome Tab Reader extension ID...")
+    detection_result = detect_chrome_tab_reader_extension()
+
+    if detection_result["found"] and detection_result["extension_ids"]:
+        ext_id = detection_result["extension_ids"][0]
+        profile_count = len(detection_result["details"])
+        if profile_count > 1:
+            return ext_id, f"auto-detected (found in {profile_count} Chrome profiles)"
+        else:
+            profile_path = detection_result["details"][0]["profile_path"]
+            return ext_id, f"auto-detected from {profile_path}"
+
+    # Not found
+    return None, "not found (no env var set and auto-detection failed)"
 @mcp.tool()
 def get_raw_tab_content() -> str:
     """Get raw extracted content from current Chrome tab without AI processing.
@@ -1140,6 +1178,23 @@ def main():
     logger.info(f"  Model: {MODEL}")
     logger.info(f"  Bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")
     logger.info(f"  Bridge Auth: {'ENABLED' if BRIDGE_AUTH_TOKEN else 'DISABLED'}")
+    logger.info("")
+    sys.stderr.flush()
+
+    # Detect Chrome extension ID
+    logger.info("=== Detecting Chrome Tab Reader Extension ===")
+    sys.stderr.flush()
+
+    extension_id, source = get_extension_id()
+
+    if extension_id:
+        logger.info(f"✓ Extension ID: {extension_id}")
+        logger.info(f"  Source: {source}")
+    else:
+        logger.warning(f"✗ Extension ID: {source}")
+        logger.warning("  The MCP server will still start, but may have issues connecting to the extension.")
+        logger.warning("  You can set CHROME_EXTENSION_ID in .env or install the extension in Chrome.")
+
     logger.info("")
     sys.stderr.flush()
 
