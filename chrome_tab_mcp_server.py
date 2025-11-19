@@ -62,6 +62,7 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL")
 MODEL = os.getenv("OLLAMA_MODEL")
 BRIDGE_AUTH_TOKEN = os.getenv("BRIDGE_AUTH_TOKEN")  # Optional auth token for native bridge
 OLLAMA_CONTEXT_LENGTH = os.getenv("OLLAMA_CONTEXT_LENGTH")  # Optional context length (num_ctx)
+CHROME_EXTENSION_ID = os.getenv("CHROME_EXTENSION_ID")  # Optional - will auto-detect if not provided
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI assistant. Process the attached webpage. "
@@ -129,7 +130,7 @@ class BridgeConnection:
 
             # Create new socket
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.sock.settimeout(60)  # 60 second timeout
+            self.sock.settimeout(300)  # 5 minute timeout
 
             # Connect
             self.sock.connect((self.host, self.port))
@@ -213,7 +214,7 @@ class BridgeConnection:
         except socket.timeout:
             logger.error("✗ Timeout waiting for bridge response")
             self.sock = None
-            raise ConnectionError("Timeout waiting for extension response (60 seconds)")
+            raise ConnectionError("Timeout waiting for extension response (5 minutes)")
         except (socket.error, OSError) as e:
             logger.error(f"✗ Socket error: {str(e)}")
             self.sock = None
@@ -416,14 +417,44 @@ def detect_chrome_tab_reader_extension() -> dict:
 mcp = FastMCP(
     "Chrome Tab Reader",
     instructions="""
-    Processes content from the active Chrome tab using local AI analysis.
+    Extracts and processes content from the active Chrome tab using local Ollama AI.
 
-    Supports flexible content filtering:
-    - Default: Full page content analysis
-    - Custom system prompt: Analyze with custom instructions
-    - Custom keywords: Filter specific sections (start/end parameters)
+    **Purpose**: Distill web content with a cheaper local model before expensive LLM analysis.
 
-    Uses local Ollama server with Qwen3-30B-A3B-Thinking model.
+    **Core Tools**:
+    - process_chrome_tab(system_prompt=None): Extract and analyze current tab
+      • Default: Generates Q&A format summary smaller than original page
+      • Custom: Use system_prompt for specialized tasks (summarize, extract data, etc.)
+      • Uses three-phase extraction: lazy-loading → DOM stability → Readability.js
+
+    - get_raw_tab_content(): Get raw extracted content without AI processing
+      • Useful when you want to process content yourself or when Ollama is unavailable
+      • Returns cleaned text from Readability.js extraction
+
+    - check_connection_status(): Check bridge and Ollama connectivity
+      • Diagnose connection issues with Chrome extension and AI server
+      • Returns status of native messaging bridge and Ollama server
+
+    - find_extension_id(): Troubleshoot extension installation
+      • Scans Chrome profiles to locate extension
+      • Returns installation paths and version info
+
+    **Prerequisites**:
+    ✓ Chrome browser running
+    ✓ Chrome Tab Reader extension installed and loaded
+    ✓ Native messaging host configured
+    ✓ Ollama server running with configured model
+
+    **When to Use**:
+    - User asks about current webpage content
+    - Need to extract structured data from page
+    - Want to summarize before detailed analysis (save tokens)
+
+    **Error Handling**:
+    - If extraction fails: Check Chrome is running and extension loaded
+    - If Ollama fails: Verify Ollama server is running
+    - Use check_connection_status() for diagnostics
+    - Use find_extension_id() for installation verification
     """
 )
 
@@ -494,27 +525,57 @@ def process_chrome_tab(
     """Process current Chrome tab content with AI analysis.
 
     Extracts and analyzes content from the active Chrome tab using the browser
-    extension's sophisticated three-phase extraction (lazy-loading, DOM stability,
-    Readability.js cleaning).
+    extension's sophisticated three-phase extraction pipeline:
+    1. Trigger lazy-loading by simulating scroll (handles infinite scroll, lazy images)
+    2. Wait for DOM stability (handles SPAs, dynamic content)
+    3. Extract clean content with Readability.js (removes ads, navigation, footers)
+
+    Then processes the extracted content through local Ollama for AI analysis.
+    This is ideal for distilling web content with a cheaper local model before
+    sending summarized information to more expensive cloud models.
+
+    Prerequisites:
+    - Chrome browser must be running
+    - Chrome Tab Reader extension must be installed and loaded
+    - Native messaging host must be configured
+    - Ollama server must be running with configured model
+    - User must have an active tab open in Chrome
 
     Args:
-        system_prompt: Optional custom prompt for AI analysis. Default prompt
-            extracts key information and provides Q&A format responses about
-            the page content. Custom prompts enable specialized analysis tasks.
+        system_prompt: Optional custom prompt for AI analysis. If not provided,
+            uses default prompt that extracts key information in Q&A format and
+            produces output smaller than the input page. Custom prompts enable
+            specialized tasks like summarization, data extraction, or analysis.
 
     Returns:
-        str: AI-generated analysis of the tab content. Thinking tags are automatically
-            stripped from the response.
+        str: AI-generated analysis of the tab content. Thinking tags (<think>)
+            are automatically stripped from the response. Returns error message
+            if extraction or AI processing fails.
 
     Examples:
+        # Default analysis - generates Q&A and key information
         process_chrome_tab()
-        # → Full page analysis with default prompt
+        # → "Q: What is this page about? A: ..."
 
-        process_chrome_tab(system_prompt="Summarize this page in 3 bullets")
-        # → Custom analysis of page content
+        # Custom summarization
+        process_chrome_tab(system_prompt="Summarize this page in 3 bullet points")
+        # → "• Main point 1\n• Main point 2\n• Main point 3"
 
-        process_chrome_tab(system_prompt="Extract all product names and prices")
-        # → Specialized extraction task
+        # Specialized data extraction
+        process_chrome_tab(system_prompt="Extract all product names and prices as JSON")
+        # → '{"products": [{"name": "...", "price": "..."}]}'
+
+        # Analysis task
+        process_chrome_tab(system_prompt="What are the main arguments in this article?")
+        # → "The article presents three main arguments: ..."
+
+    Error Handling:
+        If this tool fails, use check_connection_status() to diagnose the issue.
+        Common problems:
+        - Chrome not running: Start Chrome browser
+        - Extension not loaded: Check chrome://extensions/
+        - Ollama not running: Start Ollama server
+        - No active tab: Open a webpage in Chrome
     """
     # Extract content from Chrome tab via extension
     extraction_result = extract_tab_content_via_extension()
@@ -596,19 +657,55 @@ def process_chrome_tab(
 def find_extension_id() -> str:
     """Find the Chrome Tab Reader extension ID on this system.
 
-    Scans Chrome/Chromium extension directories to automatically detect the
-    installed Chrome Tab Reader extension ID. This is useful for:
+    Scans Chrome/Chromium extension directories across all user profiles to
+    automatically detect installed Chrome Tab Reader extensions. This diagnostic
+    tool is essential for:
     - Setting up native messaging host configuration
     - Troubleshooting connection issues
     - Verifying the extension is properly installed
+    - Finding the extension ID after installation
+
+    The tool searches platform-specific Chrome extension directories:
+    - Linux: ~/.config/google-chrome/*/Extensions/
+    - macOS: ~/Library/Application Support/Google/Chrome/*/Extensions/
+    - Windows: %LOCALAPPDATA%/Google/Chrome/User Data/*/Extensions/
 
     Returns:
-        str: Human-readable report of detected extension IDs and their locations.
-            If multiple profiles have the extension, all instances are listed.
+        str: Human-readable report containing:
+            - Extension ID(s) found (32 character lowercase string)
+            - Extension version number
+            - Chrome profile path where installed
+            - Installation instructions for native messaging host
+            - Error details if extension not found
 
     Examples:
+        # Check if extension is installed
         find_extension_id()
-        # → Reports extension ID(s) and which Chrome profiles have the extension installed
+        # → "Chrome Tab Reader Extension Detected!
+        #    Extension ID: abcdefghijklmnopqrstuvwxyz123456
+        #    Version: 1.0.0
+        #    Profile: /home/user/.config/google-chrome/Default
+        #
+        #    To configure native messaging, run:
+        #      ./install_native_host.sh abcdefghijklmnopqrstuvwxyz123456"
+
+        # Multiple profiles
+        find_extension_id()
+        # → Reports all Chrome profiles with the extension installed
+
+        # Extension not found
+        find_extension_id()
+        # → "Chrome Tab Reader Extension NOT Found
+        #    Error: Chrome Tab Reader extension not found in any Chrome profile
+        #    Troubleshooting: ..."
+
+    Use Case - Native Messaging Setup:
+        After installing the Chrome extension, use this tool to get the
+        extension ID needed for native messaging configuration:
+
+        1. Install extension in Chrome (chrome://extensions/)
+        2. Run find_extension_id() to get the ID
+        3. Use the ID with install_native_host script
     """
     result = detect_chrome_tab_reader_extension()
 
@@ -652,6 +749,199 @@ def find_extension_id() -> str:
             f"Platform: {platform.system()}",
         ]
         return "\n".join(output)
+
+
+def get_extension_id() -> tuple[str | None, str]:
+    """Get the Chrome Tab Reader extension ID.
+
+    Tries in order:
+    1. CHROME_EXTENSION_ID environment variable (highest priority)
+    2. Auto-detection by scanning Chrome extension directories
+
+    Returns:
+        tuple[str | None, str]: (extension_id, source_description)
+            extension_id: The detected extension ID, or None if not found
+            source_description: Human-readable description of where the ID came from
+    """
+    # Try environment variable first
+    if CHROME_EXTENSION_ID:
+        # Validate format (32 lowercase letters)
+        if len(CHROME_EXTENSION_ID) == 32 and CHROME_EXTENSION_ID.isalpha() and CHROME_EXTENSION_ID.islower():
+            return CHROME_EXTENSION_ID, "environment variable CHROME_EXTENSION_ID"
+        else:
+            logger.warning(f"CHROME_EXTENSION_ID env var has invalid format: {CHROME_EXTENSION_ID}")
+            logger.warning("  Extension IDs must be 32 lowercase letters (a-z)")
+            logger.warning("  Falling back to auto-detection...")
+
+    # Try auto-detection
+    logger.info("Auto-detecting Chrome Tab Reader extension ID...")
+    detection_result = detect_chrome_tab_reader_extension()
+
+    if detection_result["found"] and detection_result["extension_ids"]:
+        ext_id = detection_result["extension_ids"][0]
+        profile_count = len(detection_result["details"])
+        if profile_count > 1:
+            return ext_id, f"auto-detected (found in {profile_count} Chrome profiles)"
+        else:
+            profile_path = detection_result["details"][0]["profile_path"]
+            return ext_id, f"auto-detected from {profile_path}"
+
+    # Not found
+    return None, "not found (no env var set and auto-detection failed)"
+@mcp.tool()
+def get_raw_tab_content() -> str:
+    """Get raw extracted content from current Chrome tab without AI processing.
+
+    Extracts content using the browser extension's three-phase extraction pipeline
+    (lazy-loading, DOM stability, Readability.js cleaning) but returns the raw
+    text without sending it through Ollama for AI analysis.
+
+    This is useful when:
+    - You want to process the content yourself with different prompts
+    - Ollama server is unavailable or slow
+    - You need the full unprocessed content for analysis
+    - You want to inspect what was extracted before AI processing
+
+    Returns:
+        str: Raw cleaned text content from the current Chrome tab, or error message
+            if extraction fails.
+
+    Examples:
+        get_raw_tab_content()
+        # → Returns raw text content extracted from current tab
+
+        # Use case: Get raw content, then process with custom logic
+        raw_content = get_raw_tab_content()
+        # ... analyze raw_content yourself ...
+    """
+    # Extract content from Chrome tab via extension
+    extraction_result = extract_tab_content_via_extension()
+
+    if extraction_result.get("status") != "success":
+        error_msg = extraction_result.get("error", "Unknown error during content extraction")
+        return f"Error extracting tab content: {error_msg}"
+
+    tab_content = extraction_result.get("content", "")
+    if not tab_content:
+        return "Error: No content retrieved from Chrome tab"
+
+    # Include metadata for context
+    title = extraction_result.get("title", "Unknown")
+    url = extraction_result.get("url", "Unknown")
+
+    output = [
+        f"Title: {title}",
+        f"URL: {url}",
+        f"Content length: {len(tab_content)} characters",
+        "",
+        "--- Content ---",
+        tab_content
+    ]
+
+    return "\n".join(output)
+
+
+@mcp.tool()
+def check_connection_status() -> str:
+    """Check connectivity status of Chrome extension bridge and Ollama server.
+
+    Performs diagnostic checks to verify that all required components are
+    properly connected and functioning. This is useful for troubleshooting
+    when content extraction or AI processing fails.
+
+    Checks:
+    - Native messaging bridge connectivity (Chrome extension communication)
+    - Ollama server availability and model responsiveness
+    - Extension installation status
+
+    Returns:
+        str: Human-readable diagnostic report with status of all components.
+
+    Examples:
+        check_connection_status()
+        # → Reports status of bridge, Ollama, and extension
+    """
+    global bridge_connection
+
+    output = ["=== Chrome Tab Reader Connection Status ===", ""]
+
+    # 1. Check bridge connection
+    output.append("1. Native Messaging Bridge:")
+    if bridge_connection is None:
+        output.append("   ✗ Bridge connection not initialized")
+        output.append("   → Server may not have started properly")
+    else:
+        output.append(f"   Bridge: {bridge_connection.host}:{bridge_connection.port}")
+        output.append(f"   Auth: {'Enabled' if bridge_connection.auth_token else 'Disabled'}")
+
+        # Try to connect
+        try:
+            if bridge_connection.is_connected():
+                output.append("   ✓ Already connected")
+            else:
+                output.append("   → Attempting connection...")
+                if bridge_connection.connect():
+                    output.append("   ✓ Connection successful")
+                else:
+                    output.append("   ✗ Connection failed")
+                    output.append("   → Check Chrome is running and extension is loaded")
+        except Exception as e:
+            output.append(f"   ✗ Connection error: {str(e)}")
+
+    output.append("")
+
+    # 2. Check Ollama server
+    output.append("2. Ollama Server:")
+    output.append(f"   URL: {OLLAMA_BASE_URL}")
+    output.append(f"   Model: {MODEL}")
+
+    try:
+        # Simple health check - just try to connect
+        response = requests.get(
+            f"{OLLAMA_BASE_URL}/api/tags",
+            timeout=5
+        )
+        if response.status_code == 200:
+            output.append("   ✓ Ollama server is reachable")
+            # Check if model is available
+            try:
+                models_data = response.json()
+                model_names = [m.get("name", "") for m in models_data.get("models", [])]
+                if MODEL in model_names or any(MODEL in name for name in model_names):
+                    output.append(f"   ✓ Model '{MODEL}' is available")
+                else:
+                    output.append(f"   ⚠ Model '{MODEL}' not found in available models")
+                    output.append(f"   → Available models: {', '.join(model_names[:5])}")
+            except (json.JSONDecodeError, KeyError):
+                output.append("   ⚠ Could not parse model list")
+        else:
+            output.append(f"   ✗ Ollama server returned HTTP {response.status_code}")
+    except requests.exceptions.ConnectionError:
+        output.append(f"   ✗ Cannot connect to Ollama server")
+        output.append(f"   → Make sure Ollama is running at {OLLAMA_BASE_URL}")
+    except requests.exceptions.Timeout:
+        output.append("   ✗ Connection timeout (5 seconds)")
+    except Exception as e:
+        output.append(f"   ✗ Error: {str(e)}")
+
+    output.append("")
+
+    # 3. Check extension installation
+    output.append("3. Chrome Extension:")
+    detection_result = detect_chrome_tab_reader_extension()
+    if detection_result["found"]:
+        output.append(f"   ✓ Extension found ({len(detection_result['extension_ids'])} installation(s))")
+        for detail in detection_result["details"][:1]:  # Show first one
+            output.append(f"   ID: {detail['id']}")
+            output.append(f"   Version: {detail['version']}")
+    else:
+        output.append("   ✗ Extension not found")
+        output.append("   → Install Chrome Tab Reader extension in Chrome")
+
+    output.append("")
+    output.append("=== End Status Report ===")
+
+    return "\n".join(output)
 
 
 def test_bridge_connection(bridge: BridgeConnection, timeout: int = 10) -> bool:
@@ -910,6 +1200,23 @@ def main():
     logger.info(f"  Context Length: {OLLAMA_CONTEXT_LENGTH if OLLAMA_CONTEXT_LENGTH else 'default (model-specific)'}")
     logger.info(f"  Bridge: {BRIDGE_HOST}:{BRIDGE_PORT}")
     logger.info(f"  Bridge Auth: {'ENABLED' if BRIDGE_AUTH_TOKEN else 'DISABLED'}")
+    logger.info("")
+    sys.stderr.flush()
+
+    # Detect Chrome extension ID
+    logger.info("=== Detecting Chrome Tab Reader Extension ===")
+    sys.stderr.flush()
+
+    extension_id, source = get_extension_id()
+
+    if extension_id:
+        logger.info(f"✓ Extension ID: {extension_id}")
+        logger.info(f"  Source: {source}")
+    else:
+        logger.warning(f"✗ Extension ID: {source}")
+        logger.warning("  The MCP server will still start, but may have issues connecting to the extension.")
+        logger.warning("  You can set CHROME_EXTENSION_ID in .env or install the extension in Chrome.")
+
     logger.info("")
     sys.stderr.flush()
 
