@@ -463,7 +463,16 @@ async function getCurrentTabInfo() {
     console.log("[Chrome Tab Reader] Getting current tab info");
 
     try {
-        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        // Try to get active tab from last focused window first
+        // This works better when called from popup context
+        let tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+
+        // If no tabs found, try without window restriction
+        if (tabs.length === 0) {
+            console.log("[Chrome Tab Reader] No tab in last focused window, trying all windows");
+            tabs = await chrome.tabs.query({ active: true });
+        }
+
         if (tabs.length === 0) {
             return {
                 status: "error",
