@@ -23,9 +23,7 @@
 - After local processing: 5,000 tokens (key facts and Q&A)
 - Result: Substantial token reduction + cleaner context window
 
----
-
-## Quick Start (MCP Server)
+## Quick Start
 
 ### Prerequisites
 
@@ -105,6 +103,15 @@ Open Claude Code and ask:
 You should see all components connected. Then try:
 
 > "Summarize the current webpage I have open in Chrome"
+
+### Advanced Configuration
+
+**Optional CLI Parameters:**
+- `--context-length 8192` - Increase Ollama context window for larger pages
+- `--extension-id <id>` - Manually specify extension ID (auto-detected by default)
+- `--bridge-auth-token <token>` - Enable authentication (see [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md))
+
+**For authentication and HTTP server setup**, see [ACCESS_CONTROL_SETUP.md](ACCESS_CONTROL_SETUP.md).
 
 ---
 
