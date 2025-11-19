@@ -197,11 +197,13 @@ class TestSocketCommunication:
     def test_socket_timeout_handling(self, tcp_port):
         """Test timeout when TCP server is not responding"""
         # Try to connect to a port with no server
+        # Note: Unix raises ConnectionRefusedError immediately
+        # Windows may timeout and raise TimeoutError instead
 
         client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_sock.settimeout(1)
 
-        with pytest.raises(ConnectionRefusedError):
+        with pytest.raises((ConnectionRefusedError, TimeoutError, OSError)):
             client_sock.connect(("127.0.0.1", tcp_port))
 
 
