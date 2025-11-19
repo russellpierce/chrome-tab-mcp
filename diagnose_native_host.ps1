@@ -268,14 +268,28 @@ try {
 
             Write-Info "  Checking $distroName for port 8765..."
             try {
-                # Try with 'sh' first (more portable than bash)
-                $WSLNetstat = wsl -d $distroName -e sh -c "command -v ss >/dev/null 2>&1 && ss -tuln | grep :8765 || (command -v netstat >/dev/null 2>&1 && netstat -tuln | grep :8765) || echo 'no-tools'" 2>&1
+                # First check which tool is available
+                $HasSS = wsl -d $distroName -e sh -c "command -v ss >/dev/null 2>&1 && echo yes || echo no" 2>&1
+                $HasNetstat = wsl -d $distroName -e sh -c "command -v netstat >/dev/null 2>&1 && echo yes || echo no" 2>&1
 
-                if ($LASTEXITCODE -ne 0 -or $WSLNetstat -match "ERROR" -or $WSLNetstat -match "no-tools") {
-                    Write-Info "    → Could not check (ss/netstat not available or sh not found)"
-                } elseif ($WSLNetstat -and $WSLNetstat -notmatch "no-tools") {
+                if ($HasSS -match "yes") {
+                    # Use ss to list all listening ports
+                    $WSLPorts = wsl -d $distroName -e sh -c "ss -tuln" 2>&1
+                } elseif ($HasNetstat -match "yes") {
+                    # Use netstat to list all listening ports
+                    $WSLPorts = wsl -d $distroName -e sh -c "netstat -tuln" 2>&1
+                } else {
+                    Write-Info "    → Neither ss nor netstat available (this is OK)"
+                    continue
+                }
+
+                # Check if output contains port 8765
+                if ($WSLPorts -match ":8765") {
                     Write-Warning "    → Port 8765 IS in use in $distroName!"
-                    Write-Host "    $WSLNetstat" -ForegroundColor Yellow
+                    # Show the specific line(s) mentioning port 8765
+                    $WSLPorts | Select-String ":8765" | ForEach-Object {
+                        Write-Host "    $_" -ForegroundColor Yellow
+                    }
                     $Issues += "WSL ($distroName) occupying port 8765"
                     $Recommendations += "In WSL ($distroName), run: sudo fuser -k 8765/tcp"
                 } else {
