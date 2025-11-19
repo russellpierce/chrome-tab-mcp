@@ -285,9 +285,53 @@ class BridgeConnection:
 bridge_connection: BridgeConnection | None = None
 
 
+def get_chrome_profiles_from_local_state(user_data_dir: Path) -> list[str]:
+    """
+    Parse Chrome's Local State JSON file to get the official list of profiles.
+
+    This is the recommended method per Chromium documentation, as it reads the
+    profile metadata directly from Chrome's configuration.
+
+    Args:
+        user_data_dir: Path to Chrome's User Data directory
+
+    Returns:
+        list[str]: List of profile directory names (e.g., ["Default", "Profile 1"])
+    """
+    local_state_path = user_data_dir / "Local State"
+
+    if not local_state_path.exists():
+        logger.debug(f"Local State file not found: {local_state_path}")
+        return []
+
+    try:
+        with open(local_state_path, 'r', encoding='utf-8') as f:
+            local_state = json.load(f)
+
+        # Profile info is stored under profile.info_cache
+        profile_info_cache = local_state.get("profile", {}).get("info_cache", {})
+
+        if not profile_info_cache:
+            logger.debug("No profile.info_cache found in Local State")
+            return []
+
+        # Keys in info_cache are profile directory names
+        profiles = list(profile_info_cache.keys())
+        logger.info(f"Found {len(profiles)} profile(s) in Local State: {profiles}")
+        return profiles
+
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning(f"Failed to parse Local State file: {e}")
+        return []
+
+
 def get_chrome_extension_directories() -> list[Path]:
     """
     Get Chrome extension directories for all profiles on the current platform.
+
+    Uses the recommended Chromium approach:
+    1. Parse Local State JSON to get official profile list
+    2. Fall back to directory enumeration if Local State is unavailable
 
     Returns:
         list[Path]: List of extension directory paths that exist
@@ -332,20 +376,31 @@ def get_chrome_extension_directories() -> list[Path]:
             logger.debug(f"  Base directory does not exist: {base_dir}")
             continue
 
-        logger.debug("  Base directory exists, scanning for profiles...")
-        # Check Default profile and numbered profiles (Profile 1, Profile 2, etc.)
-        for profile_dir in base_dir.iterdir():
-            if not profile_dir.is_dir():
-                continue
+        logger.debug("  Base directory exists, discovering profiles...")
 
-            # Look for Extensions subdirectory
+        # Method 1: Try to get profiles from Local State JSON (recommended)
+        profile_names = get_chrome_profiles_from_local_state(base_dir)
+
+        # Method 2: Fallback to directory enumeration if Local State unavailable
+        if not profile_names:
+            logger.debug("  Falling back to directory enumeration")
+            profile_names = [
+                d.name for d in base_dir.iterdir()
+                if d.is_dir() and (d.name == "Default" or d.name.startswith("Profile"))
+            ]
+            logger.debug(f"  Found {len(profile_names)} profile(s) via enumeration: {profile_names}")
+
+        # Check each profile for Extensions directory
+        for profile_name in profile_names:
+            profile_dir = base_dir / profile_name
             ext_dir = profile_dir / "Extensions"
-            logger.debug(f"    Checking profile: {profile_dir.name} → {ext_dir}")
+
+            logger.debug(f"    Checking profile: {profile_name} → {ext_dir}")
             if ext_dir.exists() and ext_dir.is_dir():
                 logger.info(f"    ✓ Found Extensions directory: {ext_dir}")
                 extension_dirs.append(ext_dir)
             else:
-                logger.debug(f"    ✗ No Extensions directory in: {profile_dir.name}")
+                logger.debug(f"    ✗ No Extensions directory in: {profile_name}")
 
     logger.info(f"Total extension directories found: {len(extension_dirs)}")
     return extension_dirs
