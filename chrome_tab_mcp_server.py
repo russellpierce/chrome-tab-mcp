@@ -241,6 +241,9 @@ def get_chrome_extension_directories() -> list[Path]:
     """
     Get Chrome extension directories for all profiles on the current platform.
 
+    Uses Chrome's Local State JSON file to discover official profiles,
+    which is more reliable than scanning all directories.
+
     Returns:
         list[Path]: List of extension directory paths that exist
     """
@@ -284,20 +287,40 @@ def get_chrome_extension_directories() -> list[Path]:
             logger.debug(f"  Base directory does not exist: {base_dir}")
             continue
 
-        logger.debug("  Base directory exists, scanning for profiles...")
-        # Check Default profile and numbered profiles (Profile 1, Profile 2, etc.)
-        for profile_dir in base_dir.iterdir():
-            if not profile_dir.is_dir():
-                continue
+        logger.debug("  Base directory exists, discovering profiles...")
 
-            # Look for Extensions subdirectory
+        # Try to read Chrome's Local State file for official profile list
+        local_state_file = base_dir / "Local State"
+        profile_names = []
+
+        if local_state_file.exists():
+            try:
+                with open(local_state_file, 'r', encoding='utf-8') as f:
+                    local_state = json.load(f)
+                    # Chrome stores profile info in profile.info_cache
+                    if 'profile' in local_state and 'info_cache' in local_state['profile']:
+                        profile_names = list(local_state['profile']['info_cache'].keys())
+                        logger.info(f"Found {len(profile_names)} profile(s) in Local State: {profile_names}")
+            except (json.JSONDecodeError, OSError, KeyError) as e:
+                logger.debug(f"  Could not read Local State file: {e}")
+                logger.debug("  Falling back to directory scanning")
+
+        # If we couldn't read Local State, fall back to directory scanning
+        if not profile_names:
+            logger.debug("  No Local State available, scanning directories...")
+            profile_names = [d.name for d in base_dir.iterdir() if d.is_dir() and not d.name.startswith('.')]
+            logger.debug(f"  Found {len(profile_names)} potential profile directories via scanning")
+
+        # Check each profile for Extensions directory
+        for profile_name in profile_names:
+            profile_dir = base_dir / profile_name
             ext_dir = profile_dir / "Extensions"
-            logger.debug(f"    Checking profile: {profile_dir.name} → {ext_dir}")
+            logger.debug(f"    Checking profile: {profile_name} → {ext_dir}")
             if ext_dir.exists() and ext_dir.is_dir():
                 logger.info(f"    ✓ Found Extensions directory: {ext_dir}")
                 extension_dirs.append(ext_dir)
             else:
-                logger.debug(f"    ✗ No Extensions directory in: {profile_dir.name}")
+                logger.debug(f"    ✗ No Extensions directory in: {profile_name}")
 
     logger.info(f"Total extension directories found: {len(extension_dirs)}")
     return extension_dirs
