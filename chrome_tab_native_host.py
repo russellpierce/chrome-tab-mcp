@@ -307,6 +307,8 @@ def handle_mcp_client(client_socket):
     """
     Handle a connection from the MCP server.
 
+    Keeps connection open and handles multiple requests until client disconnects.
+
     Args:
         client_socket: The socket connection from MCP server
     """
@@ -322,68 +324,102 @@ def handle_mcp_client(client_socket):
             client_socket.sendall((json.dumps(error_response) + '\n').encode('utf-8'))
             return
 
-        # Read request from MCP server (newline-delimited JSON)
-        data = b''
+        logger.info("MCP client authenticated and ready for requests")
+
+        # Handle multiple requests on the same connection
+        request_count = 0
         while True:
-            chunk = client_socket.recv(4096)
-            if not chunk:
-                break
-            data += chunk
-            if b'\n' in data:
-                break
+            # Read request from MCP server (newline-delimited JSON)
+            data = b''
+            while True:
+                chunk = client_socket.recv(4096)
+                if not chunk:
+                    # Client disconnected
+                    logger.info(f"MCP client disconnected after {request_count} request(s)")
+                    return
+                data += chunk
+                # Find first newline (JSON should have escaped newlines in strings)
+                if b'\n' in data:
+                    # Extract first complete message
+                    newline_pos = data.index(b'\n')
+                    message_data = data[:newline_pos]
+                    # Keep any remaining data for next message (shouldn't happen in practice)
+                    remaining = data[newline_pos + 1:]
+                    if remaining:
+                        logger.warning(f"Received extra data after message: {len(remaining)} bytes")
+                    break
 
-        if not data:
-            logger.warning("No data received from MCP client")
-            return
+            if not data:
+                logger.info(f"MCP client closed connection after {request_count} request(s)")
+                return
 
-        # Parse request
-        request = json.loads(data.decode('utf-8').strip())
-        logger.info(f"Received from MCP: {request.get('action', 'unknown')}")
+            request_count += 1
 
-        # Check if extension is connected
-        if not extension_connected:
-            response = {
-                "status": "error",
-                "error": "Extension not connected. Please open Chrome and ensure the extension is installed."
-            }
-            client_socket.sendall((json.dumps(response) + '\n').encode('utf-8'))
-            return
+            # Parse request
+            try:
+                request = json.loads(message_data.decode('utf-8'))
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON from MCP client: {e}")
+                error_response = {
+                    "status": "error",
+                    "error": f"Invalid JSON: {str(e)}"
+                }
+                client_socket.sendall((json.dumps(error_response) + '\n').encode('utf-8'))
+                continue
 
-        # Generate unique request ID
-        with request_lock:
-            request_counter += 1
-            request_id = request_counter
+            logger.info(f"Request #{request_count} from MCP: {request.get('action', 'unknown')}")
 
-        # Add request ID to message
-        request['request_id'] = request_id
+            # Check if extension is connected
+            if not extension_connected:
+                response = {
+                    "status": "error",
+                    "error": "Extension not connected. Please open Chrome and ensure the extension is installed."
+                }
+                client_socket.sendall((json.dumps(response) + '\n').encode('utf-8'))
+                continue
 
-        # Create a queue for the response
-        response_queue = []
-        pending_requests[request_id] = response_queue
+            # Generate unique request ID
+            with request_lock:
+                request_counter += 1
+                request_id = request_counter
 
-        # Forward request to extension
-        send_message(request)
+            # Add request ID to message
+            request['request_id'] = request_id
 
-        # Wait for response (with timeout)
-        timeout = 60  # 60 seconds
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            if response_queue:
-                response = response_queue[0]
-                break
-            time.sleep(0.1)
-        else:
-            response = {
-                "status": "error",
-                "error": "Timeout waiting for extension response"
-            }
+            # Create a queue for the response
+            response_queue = []
+            pending_requests[request_id] = response_queue
 
-        # Clean up
-        if request_id in pending_requests:
-            del pending_requests[request_id]
+            # Forward request to extension
+            send_message(request)
 
-        # Send response back to MCP server
-        client_socket.sendall((json.dumps(response) + '\n').encode('utf-8'))
+            # Wait for response (with timeout)
+            timeout = 60  # 60 seconds
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                if response_queue:
+                    response = response_queue[0]
+                    break
+                time.sleep(0.1)
+            else:
+                response = {
+                    "status": "error",
+                    "error": "Timeout waiting for extension response"
+                }
+
+            # Clean up
+            if request_id in pending_requests:
+                del pending_requests[request_id]
+
+            # Send response back to MCP server
+            try:
+                client_socket.sendall((json.dumps(response) + '\n').encode('utf-8'))
+                logger.debug(f"Response sent for request #{request_count}")
+            except (OSError, socket.error) as e:
+                logger.error(f"Failed to send response: {e}")
+                return
+
+            # Continue to next request (keep connection open)
 
     except Exception as e:
         logger.error(f"Error handling MCP client: {e}", exc_info=True)
@@ -397,7 +433,12 @@ def handle_mcp_client(client_socket):
             # Expected error when client disconnects before receiving error response
             pass
     finally:
-        client_socket.close()
+        try:
+            client_socket.close()
+        except (OSError, socket.error):
+            # Ignore close errors (socket may already be closed)
+            pass
+        logger.info("MCP client handler exiting")
 
 
 def socket_server_thread():
