@@ -260,7 +260,7 @@ class BridgeConnection:
         except socket.timeout:
             logger.error("✗ Timeout waiting for bridge response")
             self.sock = None
-            raise ConnectionError("Timeout waiting for extension response (5 minutes)")
+            raise ConnectionError("Timeout waiting for extension response (60 seconds)")
         except (socket.error, OSError) as e:
             logger.error(f"✗ Socket error: {str(e)}")
             self.sock = None
